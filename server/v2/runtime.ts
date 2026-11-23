@@ -2389,6 +2389,50 @@ export function createReplacementRuntime(
 
       hub.emit('verdict', verdictRecord);
       hub.emit('state', snapshot());
+
+      // Send Telegram Debate Result Card
+      if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+        const isTrade = verdictRecord.action === 'OPEN_LONG' || verdictRecord.action === 'OPEN_SHORT';
+        const actionLabel = verdictRecord.action === 'OPEN_LONG'
+          ? '🟢 KEPUTUSAN: BUY / LONG (SCALPING)'
+          : verdictRecord.action === 'OPEN_SHORT'
+            ? '🔴 KEPUTUSAN: SELL / SHORT (SCALPING)'
+            : '⚪ KEPUTUSAN: HOLD / WAIT (MENUNGGU SETUP)';
+
+        const bullsList = bull.length ? bull.join(', ') : 'Tidak ada';
+        const bearsList = bear.length ? bear.join(', ') : 'Tidak ada';
+        const neutralsList = neutral.length ? neutral.join(', ') : 'Tidak ada';
+
+        let tgVerdictMsg = `⚖️ <b>[HASIL DEBAT KE-6 AGEN]</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `• <b>Aset</b>: <b>${targetSymbol}</b>\n` +
+          `• <b>Gaya Trading</b>: ⚡ <b>Scalping Cepat (M1-M15)</b>\n` +
+          `• <b>${actionLabel}</b>\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n` +
+          `👥 <b>Kubu Analisa:</b>\n` +
+          `• 🐂 <b>Pro BUY (Bull)</b>: ${bullsList}\n` +
+          `• 🐻 <b>Pro SELL (Bear)</b>: ${bearsList}\n` +
+          `• ⚖️ <b>Netral/Wait</b>: ${neutralsList}\n` +
+          `━━━━━━━━━━━━━━━━━━━━\n`;
+
+        if (isTrade && verdictRecord.order) {
+          const ord = verdictRecord.order;
+          tgVerdictMsg += `🎯 <b>Level Eksekusi Scalping:</b>\n` +
+            `• <b>Harga Entry</b>: $${ord.entry}\n` +
+            `• <b>Stop Loss (SL)</b>: $${ord.stop}\n` +
+            `• <b>Take Profit (TP)</b>: $${ord.tp ?? 'Dikelola trailing'}\n` +
+            `• <b>Margin / Modal</b>: $${ord.margin} USDT (Lev ${ord.leverage}x)\n` +
+            `• <b>Status</b>: ${verdictRecord.executed ? '✅ Posisi Dibuka Otomatis' : 'Menunggu antrian'}\n`;
+        } else {
+          tgVerdictMsg += `ℹ️ <b>Alasan Tidak Entry:</b>\n` +
+            `<i>${verdictRecord.reason ?? 'Kondisi pasar belum memenuhi konfirmasi scalping risiko rendah.'}</i>\n`;
+        }
+
+        tgVerdictMsg += `━━━━━━━━━━━━━━━━━━━━\n` +
+          `💡 <i>Hasil konsensus final disahkan oleh Desk Lead & Risk Manager.</i>`;
+
+        void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgVerdictMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+      }
       return { ok: true, message: `Cycle ${cycleId} finished with verdict ${verdictRecord.action}`, cycleId, verdict: verdictRecord };
     } catch (err) {
       return { ok: false, message: `Cycle failed: ${(err as Error).message}`, cycleId };
