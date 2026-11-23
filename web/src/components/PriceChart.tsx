@@ -5,7 +5,14 @@ import { POPULAR_SYMBOLS } from '../types';
 import { TradingViewChart } from './TradingViewChart';
 import { fmt, fmtPx } from './format';
 import { useI18n } from '../i18n';
-import { SymbolSearchSelect } from './SymbolSearchSelect';
+import { SymbolSearchSelect, useFavoriteSymbols } from './SymbolSearchSelect';
+
+function formatPillLabel(s: string): string {
+  if (s === 'XAUUSD') return 'XAU';
+  if (s === 'XAUUSDT') return 'XAU·T';
+  if (s.endsWith('IDR')) return s;
+  return s.replace(/USDT$/, '');
+}
 
 const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const localTime = (sec: number) => new Date(sec * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -17,6 +24,7 @@ export function PriceChart({ state, symbol, onSymbol, data, theme, timeframe, on
   const { t, lang } = useI18n();
   const id = lang === 'id';
   const tv = !!state.tradingview?.widget;
+  const favorites = useFavoriteSymbols();
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -129,10 +137,15 @@ export function PriceChart({ state, symbol, onSymbol, data, theme, timeframe, on
           </span>
         </div>
         <div className="chart-controls-right">
-          <div className="seg">
-            {state.watchlist.slice(0, 5).map((s) => (
-              <button key={s} className={s === symbol ? 'on' : ''} onClick={() => onSymbol(s)}>
-                {s.replace('USDT', '').replace('USD', '')}
+          <div className="seg chart-favorites-bar" role="group" aria-label="Favorit">
+            {favorites.slice(0, 6).map((s) => (
+              <button
+                key={s}
+                className={s === symbol ? 'on' : ''}
+                onClick={() => onSymbol(s)}
+                title={`Pilih pair favorit ${s}`}
+              >
+                {formatPillLabel(s)}
               </button>
             ))}
           </div>

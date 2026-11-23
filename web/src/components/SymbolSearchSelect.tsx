@@ -10,8 +10,36 @@ interface SymbolSearchSelectProps {
   className?: string;
 }
 
-const DEFAULT_FAVORITES = ['XAUUSD', 'BTCIDR', 'XAUUSDT', 'BTCUSDT', 'ETHUSDT'];
-const FAV_STORAGE_KEY = 'mpu_favorite_symbols_v1';
+export const DEFAULT_FAVORITES = ['XAUUSD', 'BTCIDR', 'XAUUSDT', 'BTCUSDT', 'ETHUSDT'];
+export const FAV_STORAGE_KEY = 'mpu_favorite_symbols_v1';
+export const FAV_EVENT_NAME = 'mpu_favorites_changed';
+
+export function getStoredFavorites(): string[] {
+  try {
+    const saved = localStorage.getItem(FAV_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return DEFAULT_FAVORITES;
+}
+
+export function useFavoriteSymbols(): string[] {
+  const [favorites, setFavorites] = useState<string[]>(getStoredFavorites);
+
+  useEffect(() => {
+    const update = () => setFavorites(getStoredFavorites());
+    window.addEventListener(FAV_EVENT_NAME, update);
+    window.addEventListener('storage', update);
+    return () => {
+      window.removeEventListener(FAV_EVENT_NAME, update);
+      window.removeEventListener('storage', update);
+    };
+  }, []);
+
+  return favorites;
+}
 
 export function SymbolSearchSelect({
   value,
@@ -25,13 +53,7 @@ export function SymbolSearchSelect({
   const id = lang === 'id';
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [favorites, setFavorites] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(FAV_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return DEFAULT_FAVORITES;
-  });
+  const favorites = useFavoriteSymbols();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -39,13 +61,12 @@ export function SymbolSearchSelect({
   // Persist favorites
   const toggleFavorite = (sym: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFavorites((prev) => {
-      const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : [sym, ...prev];
-      try {
-        localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    const prev = getStoredFavorites();
+    const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : [sym, ...prev];
+    try {
+      localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(next));
+      window.dispatchEvent(new Event(FAV_EVENT_NAME));
+    } catch {}
   };
 
   // Close on outside click
