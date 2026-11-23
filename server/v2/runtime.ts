@@ -100,7 +100,7 @@ import { readKill, writeKill, clearKill, DEFAULT_KILL_FILE } from './kill-file.j
 function normSymbol(s: string): string {
   const up = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!up) return '';
-  return /USDT$|USDC$|USD$/.test(up) ? up : `${up}USDT`;
+  return /USDT$|USDC$|USD$|IDR$/.test(up) ? up : `${up}USDT`;
 }
 
 function roundPriceMetric(val: number | null | undefined, refPrice = 1): number | null {
@@ -2885,7 +2885,7 @@ export function createReplacementRuntime(
       };
     }
 
-    if (cleanCmd.startsWith('analyze ') || cleanCmd.startsWith('debate ')) {
+    if (cleanCmd.startsWith('analyze ') || cleanCmd.startsWith('debate ') || cleanCmd.startsWith('analisa ')) {
       const sym = raw.split(/\s+/)[1]?.toUpperCase();
       if (!sym) {
         return { ok: false, error: 'Symbol required for analyze command' };
@@ -2934,6 +2934,14 @@ export function createReplacementRuntime(
           dailyLossHit: snap.dailyLoss?.hit ?? false,
           dailyLossLimitPct: snap.trading?.values?.dailyLossLimitPct ?? snap.dailyLoss?.limitPct ?? 10
         })
+      };
+    }
+
+    if (cleanCmd === 'start' || cleanCmd === 'menu') {
+      return {
+        ok: true,
+        command: cleanCmd,
+        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• 🪙 Analisa BTCIDR: Debat analisa Bitcoin Rupiah\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya`
       };
     }
 

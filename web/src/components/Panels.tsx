@@ -204,7 +204,7 @@ export function TopBar({
         <div className="brand-copy">
           <div className="brand-title-row">
             <h1>
-              Trading Agent <span>Mpu Gandring</span>
+              Trading Agent<span>ku</span>
               {onOpenUpdate && hasUpdate && (
                 <button
                   className="badge setup-btn version-btn update-avail-badge new-update-badge"

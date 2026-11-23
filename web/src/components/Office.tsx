@@ -329,6 +329,7 @@ export function Office({ state, sceneEvents, speech, fights, reactions, disagree
           <img className="studio-sconce sconce-west" src={asset('mg_env_wall_sconce')} alt="" />
           <div className="studio-sign">
             <img src="/mpu-gandring-logo.webp" alt="" />
+            <div className="studio-brand-banner">TRADING AGENTKU</div>
           </div>
           <img className="studio-sconce sconce-east" src={asset('mg_env_wall_sconce')} alt="" />
           <div className="studio-wall-clock">

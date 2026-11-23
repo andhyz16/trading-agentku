@@ -105,6 +105,18 @@ export async function generateMockAgentReply(req: MockAgentReplyRequest): Promis
       if (mSym) symbol = mSym[1].toUpperCase();
     } catch {}
 
+    // Sensible mock default price per asset class if live quote is still loading
+    if (!user.match(/"last"\s*:\s*([\d.]+)/)) {
+      if (symbol.includes('XAU') || symbol.includes('PAXG') || symbol.includes('GOLD')) lastPrice = 3620;
+      else if (symbol.includes('ETH')) lastPrice = 3300;
+      else if (symbol.includes('SOL')) lastPrice = 180;
+      else if (symbol.includes('XAG')) lastPrice = 34;
+      else if (symbol.includes('EUR')) lastPrice = 1.05;
+      else if (symbol.includes('GBP')) lastPrice = 1.26;
+      else if (symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('SHIB')) lastPrice = 0.00002;
+      else lastPrice = 75000;
+    }
+
     const isBull = change24h >= 0;
     const directionalStance: 'LONG' | 'SHORT' = isBull ? 'LONG' : 'SHORT';
     const oppositeStance: 'LONG' | 'SHORT' = isBull ? 'SHORT' : 'LONG';

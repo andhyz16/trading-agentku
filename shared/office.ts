@@ -709,7 +709,36 @@ export const VERIFIED_TOKENS = [
   'NEOUSDT',
   'IOTAUSDT',
   'ZECUSDT',
-  'DASHUSDT'
+  'DASHUSDT',
+
+  // Rupiah (IDR) Pairs
+  'BTCIDR',
+  'ETHIDR',
+  'USDTIDR',
+
+  // Commodities & FX (Emas, Perak, Forex)
+  'XAUUSD',
+  'XAUUSDT',
+  'PAXGUSDT',
+  'XAGUSD',
+  'XAGUSDT',
+  'EURUSDT',
+  'GBPUSDT',
+
+  // Crypto Receh & Trending Meme Coins
+  'PEPEUSDT',
+  'BONKUSDT',
+  'FLOKIUSDT',
+  'SHIBUSDT',
+  'PNUTUSDT',
+  'GOATUSDT',
+  'MOODENGUSDT',
+  'ACTUSDT',
+  'BRETTUSDT',
+  'NEIROUSDT',
+  'TURBOUSDT',
+  'SLERFUSDT',
+  'COWUSDT'
 ] as const;
 
 export const POPULAR_SYMBOLS = VERIFIED_TOKENS;

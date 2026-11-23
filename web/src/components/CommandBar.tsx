@@ -3,6 +3,7 @@ import { applyAndRestartOffice, officeFetch } from '../officeApi';
 import type { DeskState } from '../types';
 import { POPULAR_SYMBOLS } from '../types';
 import { useI18n } from '../i18n';
+import { SymbolSearchSelect } from './SymbolSearchSelect';
 
 export function CommandBar({ state, command }: { state: DeskState; command: (t: string) => Promise<{ ok: boolean; reply: string }> }) {
   const { t } = useI18n();
@@ -16,26 +17,13 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
     <div className="commandbar">
       <div className="cb-row">
         <div className="cb-debate">
-          <select
+          <SymbolSearchSelect
             value={symbol}
-            onChange={(e) => {
-              if (e.target.value === '__custom__') {
-                const c = window.prompt(t('customTokenPrompt'));
-                if (c) setSymbol(c.trim().toUpperCase());
-              } else {
-                setSymbol(e.target.value);
-              }
-            }}
-            aria-label="symbol"
-          >
-            <optgroup label={t('watchlistGroup')}>
-              {state.watchlist.map((s) => <option key={s} value={s}>{s}</option>)}
-            </optgroup>
-            <optgroup label={t('popularPerpsGroup')}>
-              {POPULAR_SYMBOLS.filter((s) => !state.watchlist.includes(s)).map((s) => <option key={s} value={s}>{s}</option>)}
-            </optgroup>
-            <option value="__custom__">{t('customTokenOpt')}</option>
-          </select>
+            onChange={(sym) => setSymbol(sym)}
+            watchlist={state.watchlist}
+            popularSymbols={POPULAR_SYMBOLS}
+            ariaLabel="symbol"
+          />
           <button className="primary" disabled={!!state.debate || state.paused} onClick={() => run(`analyze ${symbol}`)}>
             {state.debate ? `${t('debatingPrefix')} ${state.debate.symbol}...` : t('startDebate')}
           </button>

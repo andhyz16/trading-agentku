@@ -23,7 +23,7 @@ export type Command =
 export function normSymbol(s: string): string {
   const up = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!up) return '';
-  return /USDT$|USDC$|USD$/.test(up) ? up : `${up}USDT`;
+  return /USDT$|USDC$|USD$|IDR$/.test(up) ? up : `${up}USDT`;
 }
 
 // Plain language command parser. English plus a few Bahasa Indonesia words.

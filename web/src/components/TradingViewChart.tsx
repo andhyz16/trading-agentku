@@ -13,8 +13,15 @@ export function TradingViewChart({ symbol, prefix, theme, timeframe = '15m' }: {
     s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     s.async = true;
     s.type = 'text/javascript';
+    const cleanSym = symbol.toUpperCase().trim();
+    let tvSymbol = `${prefix}:${cleanSym}.P`;
+    if (cleanSym === 'XAUUSD') tvSymbol = 'OANDA:XAUUSD';
+    else if (cleanSym === 'XAGUSD') tvSymbol = 'OANDA:XAGUSD';
+    else if (cleanSym === 'BTCIDR') tvSymbol = 'INDODAX:BTCIDR';
+    else if (cleanSym === 'ETHIDR') tvSymbol = 'INDODAX:ETHIDR';
+    else if (cleanSym === 'USDTIDR') tvSymbol = 'INDODAX:USDTIDR';
     s.innerHTML = JSON.stringify({
-      autosize: true, symbol: `${prefix}:${symbol}.P`, interval: ({ '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D' })[timeframe], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Etc/UTC',
+      autosize: true, symbol: tvSymbol, interval: ({ '1m': '1', '5m': '5', '15m': '15', '1h': '60', '4h': '240', '1d': 'D' })[timeframe], timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Etc/UTC',
       theme: theme === 'night' ? 'dark' : 'light', style: '1', locale: 'en', allow_symbol_change: false, hide_side_toolbar: true, save_image: false, support_host: 'https://www.tradingview.com'
     });
     el.appendChild(s);

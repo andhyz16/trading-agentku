@@ -1354,3 +1354,226 @@ button:disabled { cursor: default; }
 .ap-chat .msg small { display: block; font-size: 10px; margin-top: 4px; }
 .ap-chat { overscroll-behavior: contain; }
 .ap-chat .msg { content-visibility: auto; }
+
+/* ==========================================================================
+   Searchable Symbol Picker with Favorites ⭐
+   ========================================================================== */
+.sym-picker-wrapper {
+  position: relative;
+  display: inline-block;
+  min-width: 140px;
+}
+
+.cb-debate .sym-picker-wrapper button.sym-picker-trigger,
+.sym-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 140px;
+  padding: 6px 11px !important;
+  background: var(--bg) !important;
+  border: 1.5px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-family: var(--font-ui);
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.cb-debate .sym-picker-wrapper button.sym-picker-trigger:hover,
+.sym-picker-trigger:hover {
+  border-color: var(--teal) !important;
+}
+
+.sym-picker-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sym-picker-arrow {
+  font-size: 9px;
+  opacity: 0.65;
+}
+
+.chart-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.sym-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  z-index: 9999;
+  width: 280px;
+  max-width: 90vw;
+  background: var(--panel);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fadeIn 0.15s ease-out;
+}
+
+/* Align right when in chart controls on the right side of the screen */
+.chart-controls-right .sym-picker-popover {
+  left: auto;
+  right: 0;
+}
+
+.sym-picker-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.sym-picker-search-icon {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.sym-picker-search-input {
+  flex: 1;
+  background: transparent;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  min-width: 0;
+  padding: 3px 0 !important;
+}
+
+.cb-debate .sym-picker-wrapper button.sym-picker-clear-btn,
+.sym-picker-wrapper button.sym-picker-clear-btn,
+.sym-picker-clear-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+  color: var(--text-dim) !important;
+  font-size: 11px !important;
+  cursor: pointer;
+  padding: 2px 5px !important;
+  min-width: 0 !important;
+  transform: none !important;
+}
+
+.sym-picker-clear-btn:hover {
+  color: var(--text) !important;
+  background: var(--line) !important;
+}
+
+.sym-picker-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.sym-picker-group {
+  margin-bottom: 4px;
+}
+
+.sym-picker-group-title {
+  padding: 5px 10px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sym-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  transition: background 0.1s ease;
+}
+
+.sym-picker-item:hover {
+  background: var(--panel-2);
+}
+
+.sym-picker-item.is-selected {
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--teal);
+}
+
+.cb-debate .sym-picker-wrapper button.sym-picker-star-btn,
+.sym-picker-wrapper button.sym-picker-star-btn,
+.sym-picker-star-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  cursor: pointer;
+  font-size: 15px !important;
+  color: var(--text-dim) !important;
+  padding: 0 4px !important;
+  margin: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  min-width: 0 !important;
+  transform: none !important;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.sym-picker-star-btn:hover {
+  transform: scale(1.3) !important;
+  color: #f59e0b !important;
+}
+
+.sym-picker-star-btn.is-active {
+  color: #f59e0b !important;
+}
+
+.sym-picker-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sym-picker-check {
+  font-size: 11px;
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.sym-picker-custom-item {
+  background: rgba(245, 158, 11, 0.08);
+  border-bottom: 1px dashed var(--line);
+  color: #f59e0b;
+}
+
+.sym-picker-empty {
+  padding: 18px 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+

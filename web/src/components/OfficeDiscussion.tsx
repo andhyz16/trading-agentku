@@ -4,6 +4,16 @@ import { useI18n } from '../i18n';
 import { discussionMessages } from '../discussion';
 import { FormattedText } from '../formatText';
 
+function formatMsgTime(ts: number): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  if (isToday) return time;
+  return `${d.getDate()}/${d.getMonth() + 1} ${time}`;
+}
+
 export function OfficeDiscussion({
   state,
   latest,
@@ -116,9 +126,13 @@ export function OfficeDiscussion({
             const fromName = msg.from === 'owner' ? 'Boss' : (state.agents[msg.from]?.name ?? msg.from);
             const toName = msg.to ? (msg.to === 'owner' ? 'Boss' : msg.to === 'all' ? '@all' : (state.agents[msg.to]?.name ?? msg.to)) : '';
             const targetAgent = msg.from !== 'owner' ? msg.from : (msg.to && msg.to !== 'all' && msg.to !== 'owner' ? msg.to : undefined);
+            const timeStr = formatMsgTime(msg.at);
             return (
               <button key={msg.id} onClick={() => targetAgent && onSelect(targetAgent)}>
-                <b>{fromName}{toName ? ` -> ${toName}` : ''}</b>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
+                  <b>{fromName}{toName ? ` -> ${toName}` : ''}</b>
+                  {timeStr && <time style={{ fontSize: '10.5px', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontWeight: 600, flexShrink: 0 }}>{timeStr}</time>}
+                </div>
                 <span><FormattedText text={msg.text} /></span>
                 {msg.example && <small>EXAMPLE</small>}
               </button>

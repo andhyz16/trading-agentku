@@ -103,13 +103,22 @@ export async function telegramSend(
   token: string,
   chatId: string,
   text: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  replyMarkup?: unknown
 ): Promise<boolean> {
   if (!token || !chatId) return false;
   try {
+    const payload: Record<string, unknown> = {
+      chat_id: chatId,
+      text: safe(text).slice(0, 4000),
+      disable_web_page_preview: true
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
     const res = await postJson(
       `https://api.telegram.org/bot${token}/sendMessage`,
-      { chat_id: chatId, text: safe(text).slice(0, 4000), disable_web_page_preview: true },
+      payload,
       {},
       fetchImpl
     );
@@ -569,7 +578,7 @@ export async function testChannelV2(
     const token = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
     const chatId = (env.TELEGRAM_CHAT_ID ?? '').trim();
     if (!token || !chatId) return { ok: false, detail: 'Telegram is not configured (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID required).' };
-    const ok = await telegramSend(token, chatId, msg, fetchImpl);
+    const ok = await telegramSend(token, chatId, msg, fetchImpl, TELEGRAM_QUICK_KEYBOARD);
     return ok ? { ok: true, detail: 'Test message sent to Telegram.' } : { ok: false, detail: 'Telegram did not accept the message.' };
   }
   if (channel === 'discord') {
@@ -695,6 +704,7 @@ export async function syncDiscordCommandsV2(
 }
 
 export const TELEGRAM_BOT_COMMANDS = [
+  { command: 'menu', description: 'Tampilkan tombol menu cepat (Quick Buttons)' },
   { command: 'status', description: 'Balance, equity, venue, guards status' },
   { command: 'balance', description: 'Account balance, safety net & money trade' },
   { command: 'positions', description: 'Active positions and resting exchange stops' },
@@ -734,6 +744,12 @@ export async function syncTelegramCommandsV2(
     if (!data.ok) {
       return { ok: false, detail: `Telegram error: ${safe(String(data.description ?? res.status))}` };
     }
+    await fetchImpl(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ menu_button: { type: 'commands' } }),
+      signal: AbortSignal.timeout(10_000)
+    }).catch(() => {});
     return {
       ok: true,
       detail: `Telegram commands registered with BotFather (${TELEGRAM_BOT_COMMANDS.length} commands).`,
@@ -781,6 +797,36 @@ export async function syncWhatsAppCommandsV2(
 ): Promise<{ ok: boolean; detail: string }> {
   if (!token || !phoneId) return { ok: false, detail: 'WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID are required.' };
   return { ok: true, detail: 'WhatsApp webhook commands verified and ready.' };
+}
+
+export const TELEGRAM_QUICK_KEYBOARD = {
+  keyboard: [
+    [{ text: '📊 Status' }, { text: '📋 Report' }, { text: '💼 Positions' }],
+    [{ text: '🥇 Analisa XAUUSD' }, { text: '🪙 Analisa BTCIDR' }, { text: '⚡ Analisa BTCUSDT' }],
+    [{ text: '🔎 Scan' }, { text: '🛡️ Health' }, { text: '❓ Help' }]
+  ],
+  resize_keyboard: true,
+  is_persistent: true
+};
+
+export function mapTelegramButtonToCommand(raw: string): string {
+  const text = raw.trim();
+  const normalized = text
+    .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]\s*/u, '')
+    .trim();
+
+  if (/^status$/i.test(normalized)) return '/status';
+  if (/^report$/i.test(normalized)) return '/report';
+  if (/^positions$/i.test(normalized)) return '/positions';
+  if (/^health$/i.test(normalized)) return '/health';
+  if (/^scan$/i.test(normalized)) return '/scan';
+  if (/^help$/i.test(normalized)) return '/help';
+  if (/^menu$/i.test(normalized) || /^start$/i.test(normalized)) return '/menu';
+  if (/^(?:analisa|analyze|debat|debate)\s+(.+)$/i.test(normalized)) {
+    const match = normalized.match(/^(?:analisa|analyze|debat|debate)\s+(.+)$/i);
+    return `/analyze ${match ? match[1].trim() : ''}`;
+  }
+  return text;
 }
 
 export class TelegramPoller {
@@ -839,8 +885,9 @@ export class TelegramPoller {
             if (fromChat !== this.chatId || (this.allowedUsers.length > 0 && !this.allowedUsers.includes(fromUser))) {
               continue;
             }
-            const reply = await this.executeCommand(m.text, `telegram:${fromChat}:${fromUser}`);
-            await telegramSend(this.token, fromChat, reply, this.fetchImpl);
+            const cmdToExec = mapTelegramButtonToCommand(m.text);
+            const reply = await this.executeCommand(cmdToExec, `telegram:${fromChat}:${fromUser}`);
+            await telegramSend(this.token, fromChat, reply, this.fetchImpl, TELEGRAM_QUICK_KEYBOARD);
           }
         }
         if (!data.result?.length && !signal.aborted) {
