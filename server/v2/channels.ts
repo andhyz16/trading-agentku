@@ -803,7 +803,7 @@ export const TELEGRAM_QUICK_KEYBOARD = {
   keyboard: [
     [{ text: '📊 Status' }, { text: '📋 Report' }, { text: '💼 Positions' }],
     [{ text: '🥇 Analisa XAUUSD' }, { text: '🪙 Analisa BTCIDR' }, { text: '⚡ Analisa BTCUSDT' }],
-    [{ text: '🔎 Scan' }, { text: '🛡️ Health' }, { text: '❓ Help' }]
+    [{ text: '🏆 Win Rate' }, { text: '🔎 Scan' }, { text: '❓ Help' }]
   ],
   resize_keyboard: true,
   is_persistent: true
@@ -821,6 +821,7 @@ export function mapTelegramButtonToCommand(raw: string): string {
   if (/^health$/i.test(normalized)) return '/health';
   if (/^scan$/i.test(normalized)) return '/scan';
   if (/^help$/i.test(normalized)) return '/help';
+  if (/^(?:win\s*rate|scorecard)$/i.test(normalized)) return '/scorecard';
   if (/^menu$/i.test(normalized) || /^start$/i.test(normalized)) return '/menu';
   if (/^(?:analisa|analyze|debat|debate)\s+(.+)$/i.test(normalized)) {
     const match = normalized.match(/^(?:analisa|analyze|debat|debate)\s+(.+)$/i);

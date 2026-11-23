@@ -85,7 +85,7 @@ import {
 import { ResearchHost, fetchPublicCryptoNews } from './research/host.js';
 import { GrokBridge } from './connectors/grok/bridge.js';
 import type { KeyRegistry } from './connectors/grok/auth.js';
-import { HELP_TEXT, DiscordGateway, syncDiscordCommandsV2, syncTelegramCommandsV2, TelegramPoller } from './channels.js';
+import { HELP_TEXT, DiscordGateway, syncDiscordCommandsV2, syncTelegramCommandsV2, TelegramPoller, telegramSend, TELEGRAM_QUICK_KEYBOARD } from './channels.js';
 import { formatDeskReportText, ReportsService } from './reports.js';
 import {
   deskOpenPnl,
@@ -2127,6 +2127,18 @@ export function createReplacementRuntime(
                 kind: 'execution',
                 text: `Opened PAPER ${side} ${qty} ${targetSymbol} at ${entryPrice} (SL: ${stopPrice}, TP: ${tpPrice ?? 'none'})`
               });
+
+              if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+                const tgMsg = `🚀 <b>[SIMULASI PAPER DIBUKA]</b>\n\n` +
+                  `• <b>Aset</b>: <b>${targetSymbol}</b> (${side})\n` +
+                  `• <b>Harga Entry</b>: $${entryPrice}\n` +
+                  `• <b>Stop Loss (SL)</b>: $${stopPrice}\n` +
+                  `• <b>Take Profit (TP)</b>: $${tpPrice ?? 'Belum ditentukan'}\n` +
+                  `• <b>Modal / Margin</b>: $${margin} USDT (Lev ${leverage}x)\n` +
+                  `• <b>Ukuran Qty</b>: ${qty}\n\n` +
+                  `🤖 <i>Dikelola & dipantau otomatis oleh ke-6 Agen Trading Agentku!</i>`;
+                void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+              }
             } else {
               verdictRecord.executed = false;
               verdictRecord.reason = `Risk gate held: Max open positions (${currentSnap.paper.n}) reached.`;
@@ -3033,10 +3045,25 @@ export function createReplacementRuntime(
       };
     }
 
-    if (cleanCmd === 'scorecard' || cleanCmd === 'scores') {
+    if (cleanCmd === 'scorecard' || cleanCmd === 'scores' || cleanCmd === 'winrate') {
       const snap = snapshot();
       const sc = snap.scorecard ?? [];
-      return { ok: true, command: 'scorecard', reply: formatScorecardCard(sc) };
+      const closed = snap.paper.closed ?? [];
+      const wins = closed.filter((c: any) => Number(c.pnl) > 0).length;
+      const losses = closed.filter((c: any) => Number(c.pnl) < 0).length;
+      const total = closed.length;
+      const winRate = total > 0 ? Math.round((wins / total) * 100) : 0;
+      const netPnl = Math.round(closed.reduce((s: number, c: any) => s + (Number(c.pnl) || 0), 0) * 100) / 100;
+
+      const summaryHeader = `🏆 STATISTIK PERFORMA SIMULASI\n━━━━━━━━━━━━━━━━━━━━\n` +
+        `• Total Selesai: ${total} transaksi\n` +
+        `• Menang (Win): ${wins} trade\n` +
+        `• Kalah (Loss): ${losses} trade\n` +
+        `• Win Rate: ${winRate}%\n` +
+        `• Akumulasi PnL: ${netPnl >= 0 ? '+' : ''}$${netPnl.toFixed(2)} USDT\n` +
+        `• Saldo Terkini: $${snap.paper.balance.toFixed(2)} USDT\n━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+      return { ok: true, command: 'scorecard', reply: summaryHeader + formatScorecardCard(sc) };
     }
 
     if (cleanCmd === 'lessons' || cleanCmd === 'learnings') {
@@ -4007,16 +4034,87 @@ export function createReplacementRuntime(
     for (const pos of activePositions) {
       const sym = pos.symbol.toUpperCase();
       const frame = marketHub?.snapshot(sym);
-      const currPrice = frame?.last?.value ? Number(frame.last.value) : (pos.mark || pos.entry);
+      const tickerLast = Number(snap.tickers[sym]?.last);
+      const currPrice = (frame?.last?.value ? Number(frame.last.value) : 0) || (tickerLast > 0 ? tickerLast : 0) || (pos.mark || pos.entry);
       if (!currPrice || currPrice <= 0 || !pos.entry || pos.entry <= 0) continue;
 
       const isLong = pos.side === 'LONG';
+      const leverage = (pos as any).leverage || snap.trading?.values?.maxLeverage || snap.paper?.maxLeverage || 10;
+
+      // 0. Auto-TP & Auto-SL Execution for PAPER positions
+      if (snap.mode === 'PAPER') {
+        const hitSL = pos.stop > 0 && (isLong ? currPrice <= pos.stop : currPrice >= pos.stop);
+        const hitTP = pos.tp && pos.tp > 0 && (isLong ? currPrice >= pos.tp : currPrice <= pos.tp);
+
+        if (hitSL || hitTP) {
+          const reason = hitTP ? 'TP_HIT' : 'SL_HIT';
+          const exitPrice = hitTP ? Number(pos.tp) : Number(pos.stop);
+          const pnl = Math.round((isLong ? (exitPrice - pos.entry) : (pos.entry - exitPrice)) * pos.qty * 100) / 100;
+          const pnlPct = Math.round(((isLong ? (exitPrice - pos.entry) : (pos.entry - exitPrice)) / pos.entry) * leverage * 10000) / 100;
+
+          hub.emit('log', {
+            at: Date.now(),
+            kind: 'execution',
+            text: `[PAPER ${reason}] ${sym} ${pos.side} closed at ${exitPrice} | PnL: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% ROE)`
+          });
+
+          // Close position in runtime state & update balance
+          updateState((draft) => {
+            draft.paper.positions = draft.paper.positions.filter((p) => p.id !== pos.id && p.symbol !== pos.symbol);
+            draft.paper.balance = Math.round((draft.paper.balance + pnl) * 100) / 100;
+            draft.paper.usedMargin = Math.max(0, draft.paper.usedMargin - (pos.margin ?? 0));
+            draft.paper.canOpen = draft.paper.positions.length < draft.paper.n;
+            const upnl = draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0);
+            draft.paper.unrealized = upnl;
+            draft.paper.equity = Math.round((draft.paper.balance + upnl) * 100) / 100;
+
+            if (!Array.isArray(draft.paper.closed)) draft.paper.closed = [];
+            draft.paper.closed.push({
+              id: pos.id,
+              symbol: pos.symbol,
+              side: pos.side,
+              qty: pos.qty,
+              entry: pos.entry,
+              exit: exitPrice,
+              pnl,
+              pnlPct,
+              openedAt: pos.openedAt,
+              closedAt: Date.now(),
+              reason
+            } as any);
+
+            // Update scorecard
+            if (Array.isArray(draft.scorecard)) {
+              for (const sc of draft.scorecard) {
+                sc.calls = (sc.calls || 0) + 1;
+                if (pnl > 0) sc.right = (sc.right || 0) + 1;
+                else sc.wrong = (sc.wrong || 0) + 1;
+              }
+            }
+          });
+
+          // Send Telegram notification if configured
+          if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+            const icon = hitTP ? '🎉' : '🛑';
+            const actionText = hitTP ? 'TAKE PROFIT TERCAPAI' : 'STOP LOSS TERKENA';
+            const tgMsg = `${icon} <b>[SIMULASI PAPER ${actionText}]</b>\n\n` +
+              `• <b>Aset</b>: <b>${sym}</b> (${pos.side})\n` +
+              `• <b>Harga Entry</b>: $${pos.entry}\n` +
+              `• <b>Harga Exit</b>: $${exitPrice}\n` +
+              `• <b>Hasil PnL</b>: ${pnl >= 0 ? '🟢 Untung' : '🔴 Cut Loss'} <b>${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</b> (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% ROE)\n` +
+              `• <b>Saldo Terkini</b>: <b>$${(snap.paper.balance + pnl).toFixed(2)} USDT</b>`;
+            void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+          }
+
+          continue;
+        }
+      }
+
       const initialRisk = pos.stop > 0 ? Math.abs(pos.entry - pos.stop) : (pos.entry * 0.04);
       if (initialRisk <= 0) continue;
 
       const unrealizedPnlDist = isLong ? (currPrice - pos.entry) : (pos.entry - currPrice);
       const rMultiple = unrealizedPnlDist / initialRisk;
-      const leverage = (pos as any).leverage || snap.trading?.values?.maxLeverage || snap.paper?.maxLeverage || 10;
       const priceMovePct = (unrealizedPnlDist / pos.entry) * 100;
       const roePct = priceMovePct * leverage;
 
@@ -5486,6 +5584,85 @@ export async function startReplacementServer(
     syncTimer.unref();
   }
 
+  // Resilient live price poller for Gold (XAUUSD), BTCIDR, and Crypto
+  let externalPriceTimer: NodeJS.Timeout | null = null;
+  const pollExternalPrices = async () => {
+    try {
+      // 1. CoinGecko for Gold (PAX Gold / Tether Gold) & Crypto
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether-gold,pax-gold,bitcoin,ethereum,solana&vs_currencies=usd', { signal: AbortSignal.timeout(6000) });
+      if (cgRes.ok) {
+        const cgData = (await cgRes.json()) as any;
+        const goldPrice = Number(cgData['pax-gold']?.usd ?? cgData['tether-gold']?.usd);
+        const btcPrice = Number(cgData['bitcoin']?.usd);
+        const ethPrice = Number(cgData['ethereum']?.usd);
+        const solPrice = Number(cgData['solana']?.usd);
+        const now = Date.now();
+
+        runtime.updateState((draft) => {
+          if (goldPrice > 0) {
+            draft.tickers['XAUUSD'] = { symbol: 'XAUUSD', last: goldPrice, change24hPct: 0, source: 'coingecko.gold', example: false, at: now };
+            draft.tickers['XAUUSDT'] = { symbol: 'XAUUSDT', last: goldPrice, change24hPct: 0, source: 'coingecko.gold', example: false, at: now };
+          }
+          if (btcPrice > 0) {
+            draft.tickers['BTCUSDT'] = { symbol: 'BTCUSDT', last: btcPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
+          }
+          if (ethPrice > 0) {
+            draft.tickers['ETHUSDT'] = { symbol: 'ETHUSDT', last: ethPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
+          }
+          if (solPrice > 0) {
+            draft.tickers['SOLUSDT'] = { symbol: 'SOLUSDT', last: solPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
+          }
+
+          if (Array.isArray(draft.paper.positions) && draft.paper.positions.length > 0) {
+            for (const pos of draft.paper.positions) {
+              const sym = pos.symbol.toUpperCase();
+              const p = draft.tickers[sym]?.last;
+              if (p && Number(p) > 0) {
+                pos.mark = Number(p);
+                const mult = pos.side === 'LONG' ? 1 : -1;
+                pos.unrealizedPnl = Math.round(mult * (Number(p) - pos.entry) * pos.qty * 100) / 100;
+              }
+            }
+            const totalUpnl = Math.round(draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0) * 100) / 100;
+            draft.paper.unrealized = totalUpnl;
+            draft.paper.equity = Math.round((draft.paper.balance + totalUpnl) * 100) / 100;
+          }
+        });
+      }
+    } catch {}
+
+    // 2. Indodax for BTCIDR
+    try {
+      const idxRes = await fetch('https://indodax.com/api/ticker/btcidr', { signal: AbortSignal.timeout(6000) });
+      if (idxRes.ok) {
+        const idxData = (await idxRes.json()) as any;
+        const btcIdr = Number(idxData?.ticker?.last);
+        if (btcIdr > 0) {
+          const now = Date.now();
+          runtime.updateState((draft) => {
+            draft.tickers['BTCIDR'] = { symbol: 'BTCIDR', last: btcIdr, change24hPct: 0, source: 'indodax', example: false, at: now };
+            if (Array.isArray(draft.paper.positions)) {
+              for (const pos of draft.paper.positions) {
+                if (pos.symbol.toUpperCase() === 'BTCIDR') {
+                  pos.mark = btcIdr;
+                  const mult = pos.side === 'LONG' ? 1 : -1;
+                  pos.unrealizedPnl = Math.round(mult * (btcIdr - pos.entry) * pos.qty * 100) / 100;
+                }
+              }
+              const totalUpnl = Math.round(draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0) * 100) / 100;
+              draft.paper.unrealized = totalUpnl;
+              draft.paper.equity = Math.round((draft.paper.balance + totalUpnl) * 100) / 100;
+            }
+          });
+        }
+      }
+    } catch {}
+  };
+
+  void pollExternalPrices();
+  externalPriceTimer = setInterval(() => { void pollExternalPrices(); }, 15_000);
+  externalPriceTimer.unref();
+
   const shutdown = () => {
     if (discordGateway) {
       try { discordGateway.stop(); } catch {}
@@ -5496,6 +5673,7 @@ export async function startReplacementServer(
       telegramPoller = null;
     }
     if (syncTimer) clearInterval(syncTimer);
+    if (externalPriceTimer) clearInterval(externalPriceTimer);
     wss.close();
     server.closeAllConnections();
     void runtime.stop().catch(() => {});
