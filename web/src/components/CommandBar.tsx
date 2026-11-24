@@ -16,8 +16,9 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
   const [radarData, setRadarData] = useState<RadarReportData | null>(null);
   const [radarBusy, setRadarBusy] = useState(false);
 
-  const openRadar = async (customSymbols?: string) => {
-    const cmd = customSymbols ? `screen ${customSymbols}` : 'screen';
+  const openRadar = async (customSymbols?: string, notifyTelegram = false) => {
+    const flag = notifyTelegram ? ' --notify-tg' : '';
+    const cmd = customSymbols ? `screen ${customSymbols}${flag}` : `screen${flag}`;
     setRadarBusy(true);
     if (!radarData) {
       setRadarData({ at: Date.now(), items: [] });
@@ -142,7 +143,7 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           data={radarData}
           busy={radarBusy}
           onRefresh={() => void openRadar()}
-          onScanCustom={(symbolsText) => void openRadar(symbolsText)}
+          onScanCustom={(symbolsText, notifyTg) => void openRadar(symbolsText, notifyTg)}
           onClose={() => setRadarData(null)}
           onExecuteEntry={async (symbol, side, stop, tp, entry) => {
             const cmd = entry != null

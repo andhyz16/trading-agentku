@@ -33,7 +33,7 @@ export function RadarModal({
   data: RadarReportData;
   onClose: () => void;
   onRefresh: () => void;
-  onScanCustom?: (symbolsText: string) => void;
+  onScanCustom?: (symbolsText: string, notifyTelegram?: boolean) => void;
   onExecuteEntry?: (symbol: string, side: 'LONG' | 'SHORT', stop: number, tp: number, entry?: number) => Promise<{ ok: boolean; message?: string }>;
   busy?: boolean;
 }) {
@@ -44,6 +44,7 @@ export function RadarModal({
 
   const [executingSymbol, setExecutingSymbol] = useState<string | null>(null);
   const [executedResults, setExecutedResults] = useState<Record<string, { ok: boolean; message?: string }>>({});
+  const [notifyTelegram, setNotifyTelegram] = useState(true);
 
   const [selectedTokens, setSelectedTokens] = useState<string[]>(() => {
     const fromItems = items.map((i) =>
@@ -75,7 +76,7 @@ export function RadarModal({
       }
     }
     if (list.length > 0 && onScanCustom) {
-      onScanCustom(list.join(' '));
+      onScanCustom(list.join(' '), notifyTelegram);
     }
   };
 
@@ -241,28 +242,50 @@ export function RadarModal({
                 fontWeight: 600
               }}
             />
-            <button
-              type="button"
-              disabled={busy || selectedTokens.length === 0}
-              onClick={handleCustomScan}
-              style={{
-                padding: '7px 18px',
-                borderRadius: '6px',
-                background: '#059669',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 800,
-                fontSize: '12.5px',
-                cursor: busy ? 'not-allowed' : 'pointer',
-                opacity: busy ? 0.7 : 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)'
-              }}
-            >
-              {busy ? 'Memindai…' : '🔍 Scan Koin Pilihan'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#0f172a',
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={notifyTelegram}
+                  onChange={(e) => setNotifyTelegram(e.target.checked)}
+                  style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#059669' }}
+                />
+                📲 Kirim ke Telegram
+              </label>
+              <button
+                type="button"
+                disabled={busy || selectedTokens.length === 0}
+                onClick={handleCustomScan}
+                style={{
+                  padding: '7px 18px',
+                  borderRadius: '6px',
+                  background: '#059669',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 800,
+                  fontSize: '12.5px',
+                  cursor: busy ? 'not-allowed' : 'pointer',
+                  opacity: busy ? 0.7 : 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 4px rgba(5, 150, 105, 0.25)'
+                }}
+              >
+                {busy ? 'Memindai…' : '🔍 Scan Koin Pilihan'}
+              </button>
+            </div>
           </div>
         </div>
 

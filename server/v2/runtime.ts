@@ -4876,6 +4876,19 @@ export async function startReplacementServer(
           }
           draft.paper.canOpen = draft.paper.positions.length < draft.paper.n;
         });
+
+        if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+          const sideIcon = side === 'LONG' ? '🟢 BUY / LONG' : '🔴 SELL / SHORT';
+          const msg = `⚡ <b>EKSEKUSI POSISI BARU</b>\n\n` +
+            `• Aset: <b>${symbol}</b>\n` +
+            `• Arah: <b>${sideIcon}</b>\n` +
+            `• Harga Entry: <b>$${entryNum}</b>\n` +
+            `• Stop Loss (SL): <b>$${stopNum ?? (side === 'LONG' ? (entryNum * 0.994).toFixed(2) : (entryNum * 1.006).toFixed(2))}</b>\n` +
+            `• Take Profit (TP): <b>${tpNum ? '$' + tpNum : 'Trailing'}</b>\n` +
+            `• Margin: <b>$${((qtyNum * entryNum) / leverage).toFixed(2)} USDT (${leverage}x)</b>\n` +
+            `• Status: <b>✅ Posisi Dibuka</b>`;
+          void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, msg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+        }
       }
 
       return {
