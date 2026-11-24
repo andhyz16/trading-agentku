@@ -2129,14 +2129,14 @@ export function createReplacementRuntime(
               });
 
               if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-                const tgMsg = `🚀 <b>[SIMULASI PAPER DIBUKA]</b>\n\n` +
-                  `• <b>Aset</b>: <b>${targetSymbol}</b> (${side})\n` +
-                  `• <b>Harga Entry</b>: $${entryPrice}\n` +
-                  `• <b>Stop Loss (SL)</b>: $${stopPrice}\n` +
-                  `• <b>Take Profit (TP)</b>: $${tpPrice ?? 'Belum ditentukan'}\n` +
-                  `• <b>Modal / Margin</b>: $${margin} USDT (Lev ${leverage}x)\n` +
-                  `• <b>Ukuran Qty</b>: ${qty}\n\n` +
-                  `🤖 <i>Dikelola & dipantau otomatis oleh ke-6 Agen Trading Agentku!</i>`;
+                const tgMsg = `🚀 <b>SIMULASI PAPER DIBUKA</b>\n\n` +
+                  `• <b>Aset:</b> ${targetSymbol} (${side})\n` +
+                  `• <b>Harga Entry:</b> $${entryPrice}\n` +
+                  `• <b>Stop Loss (SL):</b> $${stopPrice}\n` +
+                  `• <b>Take Profit (TP):</b> $${tpPrice ?? 'Dikelola trailing'}\n` +
+                  `• <b>Modal / Margin:</b> $${margin} USDT (Lev ${leverage}x)\n` +
+                  `• <b>Ukuran Qty:</b> ${qty}\n\n` +
+                  `🤖 <i>Dikelola & dipantau otomatis oleh 6 Agen Mpu Gandring</i>`;
                 void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
               }
             } else {
@@ -2403,26 +2403,26 @@ export function createReplacementRuntime(
         const bearsList = bear.length ? bear.join(', ') : 'Tidak ada';
         const neutralsList = neutral.length ? neutral.join(', ') : 'Tidak ada';
 
-        let tgVerdictMsg = `⚖️ <b>[HASIL DEBAT KE-6 AGEN]</b>\n` +
+        let tgVerdictMsg = `⚖️ <b>HASIL DEBAT 6 AGEN</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
-          `• <b>Aset</b>: <b>${targetSymbol}</b>\n` +
-          `• <b>Gaya Trading</b>: ⚡ <b>Scalping Cepat (M1-M15)</b>\n` +
+          `• <b>Aset:</b> ${targetSymbol}\n` +
+          `• <b>Gaya Trading:</b> ⚡ Scalping Cepat (M1-M15)\n` +
           `• <b>${actionLabel}</b>\n` +
           `━━━━━━━━━━━━━━━━━━━━\n` +
           `👥 <b>Kubu Analisa:</b>\n` +
-          `• 🐂 <b>Pro BUY (Bull)</b>: ${bullsList}\n` +
-          `• 🐻 <b>Pro SELL (Bear)</b>: ${bearsList}\n` +
-          `• ⚖️ <b>Netral/Wait</b>: ${neutralsList}\n` +
+          `• 🐂 <b>Pro BUY (Bull):</b> ${bullsList}\n` +
+          `• 🐻 <b>Pro SELL (Bear):</b> ${bearsList}\n` +
+          `• ⚖️ <b>Netral/Wait:</b> ${neutralsList}\n` +
           `━━━━━━━━━━━━━━━━━━━━\n`;
 
         if (isTrade && verdictRecord.order) {
           const ord = verdictRecord.order;
           tgVerdictMsg += `🎯 <b>Level Eksekusi Scalping:</b>\n` +
-            `• <b>Harga Entry</b>: $${ord.entry}\n` +
-            `• <b>Stop Loss (SL)</b>: $${ord.stop}\n` +
-            `• <b>Take Profit (TP)</b>: $${ord.tp ?? 'Dikelola trailing'}\n` +
-            `• <b>Margin / Modal</b>: $${ord.margin} USDT (Lev ${ord.leverage}x)\n` +
-            `• <b>Status</b>: ${verdictRecord.executed ? '✅ Posisi Dibuka Otomatis' : 'Menunggu antrian'}\n`;
+            `• <b>Harga Entry:</b> $${ord.entry}\n` +
+            `• <b>Stop Loss (SL):</b> $${ord.stop}\n` +
+            `• <b>Take Profit (TP):</b> $${ord.tp ?? 'Dikelola trailing'}\n` +
+            `• <b>Margin / Modal:</b> $${ord.margin} USDT (Lev ${ord.leverage}x)\n` +
+            `• <b>Status:</b> ${verdictRecord.executed ? '✅ Posisi Dibuka Otomatis' : 'Menunggu antrian'}\n`;
         } else {
           tgVerdictMsg += `ℹ️ <b>Alasan Tidak Entry:</b>\n` +
             `<i>${verdictRecord.reason ?? 'Kondisi pasar belum memenuhi konfirmasi scalping risiko rendah.'}</i>\n`;
@@ -4141,12 +4141,12 @@ export function createReplacementRuntime(
           if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
             const icon = hitTP ? '🎉' : '🛑';
             const actionText = hitTP ? 'TAKE PROFIT TERCAPAI' : 'STOP LOSS TERKENA';
-            const tgMsg = `${icon} <b>[SIMULASI PAPER ${actionText}]</b>\n\n` +
-              `• <b>Aset</b>: <b>${sym}</b> (${pos.side})\n` +
-              `• <b>Harga Entry</b>: $${pos.entry}\n` +
-              `• <b>Harga Exit</b>: $${exitPrice}\n` +
-              `• <b>Hasil PnL</b>: ${pnl >= 0 ? '🟢 Untung' : '🔴 Cut Loss'} <b>${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</b> (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% ROE)\n` +
-              `• <b>Saldo Terkini</b>: <b>$${(snap.paper.balance + pnl).toFixed(2)} USDT</b>`;
+            const tgMsg = `${icon} <b>SIMULASI PAPER: ${actionText}</b>\n\n` +
+              `• <b>Aset:</b> ${sym} (${pos.side})\n` +
+              `• <b>Harga Entry:</b> $${pos.entry.toLocaleString('en-US', { maximumFractionDigits: 4 })}\n` +
+              `• <b>Harga Exit:</b> $${exitPrice.toLocaleString('en-US', { maximumFractionDigits: 4 })}\n` +
+              `• <b>Hasil PnL:</b> ${pnl >= 0 ? '🟢 Untung' : '🔴 Cut Loss'} <b>${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}</b> (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}% ROE)\n` +
+              `• <b>Saldo Terkini:</b> <b>$${(snap.paper.balance + pnl).toFixed(2)} USDT</b>`;
             void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
           }
 

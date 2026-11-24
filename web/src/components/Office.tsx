@@ -206,14 +206,8 @@ function Agent({
             <i />
           </div>
         )}
-        {sp && sp.text.includes('Terima kasih traktiran cendolnya') && (
-          <div className="cendol-speech-tag" role="status">
-            <img src="https://edge-cdn.trakteer.id/images/embed/trbtn-icon.png?v=14-05-2025" alt="" className="cendol-speech-icon" />
-            <span>{sp.text}</span>
-          </div>
-        )}
         <div className={`bot-wrap ${flip ? 'flip' : ''}`}>
-          <Bot id={a.id} size={62} pose={pose} face={face} talking={talking || Boolean(sp && sp.text.includes('Terima kasih traktiran cendolnya'))} />
+          <Bot id={a.id} size={62} pose={pose} face={face} talking={talking} />
         </div>
         <div className="nametag">
           <strong>{a.name}</strong>
@@ -284,25 +278,6 @@ export function Office({ state, sceneEvents, speech, fights, reactions, disagree
         {pnl.source.includes('stale') && <small>Stale data</small>}
       </output>
       <div className="office-hud">{children}</div>
-      {cendolBanner && (
-        <div className="office-cendol-banner" role="status" aria-live="polite">
-          <img
-            src="https://edge-cdn.trakteer.id/images/embed/trbtn-icon.png?v=14-05-2025"
-            alt="Cendol"
-            className="cendol-banner-icon"
-          />
-          <div className="cendol-banner-content">
-            <strong>Terima kasih traktiran cendolnya!</strong>
-            <span>
-              <b>{cendolBanner.supporter}</b> mentraktir <b>{cendolBanner.quantity} Cendol</b>
-              {cendolBanner.message ? ` · "${cendolBanner.message}"` : ''}
-            </span>
-          </div>
-          {onDismissCendol && (
-            <button type="button" className="cendol-banner-close" onClick={onDismissCendol} aria-label="Close notification">✕</button>
-          )}
-        </div>
-      )}
       <div className="office-world" data-debate-phase={state.debate?.phase ?? 'idle'}>
         <button className="office-motion" aria-pressed={motionPaused} onClick={() => setMotionPaused(!motionPaused)}>{motionPaused ? 'Resume animation' : 'Pause animation'}</button>
         <div className="studio-room" aria-hidden="true">

@@ -76,61 +76,7 @@ export function useDesk() {
 
   const dismissCendolBanner = useCallback(() => setCendolBanner(null), []);
 
-  const triggerCendolTip = useCallback(async (opts?: { supporter?: string; quantity?: number; message?: string }) => {
-    try {
-      await fetch('/api/trakteer/tip', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          supporter_name: opts?.supporter || 'Supporter',
-          quantity: opts?.quantity || 1,
-          support_message: opts?.message || ''
-        })
-      });
-    } catch { /* ignore */ }
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch('/api/trakteer/config')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { ok?: boolean; channelId?: string } | null) => {
-        if (cancelled || !d?.ok || !d.channelId) return;
-        const channelId = d.channelId;
-        const bind = () => {
-          if (cancelled || !window.TrakteerWS) return;
-          try {
-            window.TrakteerWS.register(channelId);
-            const onTip = (data: Record<string, unknown>) => {
-              void fetch('/api/trakteer/tip', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(data || {})
-              }).catch(() => {});
-            };
-            window.TrakteerWS.onNewTipSuccess = onTip;
-            window.TrakteerWS.onStreamTest = onTip;
-          } catch { /* ignore */ }
-        };
-        if (window.TrakteerWS) {
-          bind();
-          return;
-        }
-        const existing = document.querySelector<HTMLScriptElement>('script[data-trakteer-ws="1"]');
-        if (existing) {
-          existing.addEventListener('load', bind, { once: true });
-          return;
-        }
-        const script = document.createElement('script');
-        script.src = 'https://assets.trakteer.id/js/trws.min.js';
-        script.async = true;
-        script.dataset.trakteerWs = '1';
-        script.onload = bind;
-        document.head.appendChild(script);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  const triggerCendolTip = useCallback(async () => {}, []);
 
   useEffect(() => {
     let ws: WebSocket | null = null;

@@ -18,7 +18,7 @@ async function attempt(name: ChannelName, fn: () => Promise<Response>): Promise<
 
 export function telegramSend(c: ChannelConfig['telegram'], text: string, fetchImpl: typeof fetch = fetch, chatId = c.chatId): Promise<SendResult> {
   if (!c.token || !chatId) return Promise.resolve('off');
-  return attempt('telegram', () => post(fetchImpl, `https://api.telegram.org/bot${c.token}/sendMessage`, { chat_id: chatId, text: safe(text).slice(0, 4000), disable_web_page_preview: true }));
+  return attempt('telegram', () => post(fetchImpl, `https://api.telegram.org/bot${c.token}/sendMessage`, { chat_id: chatId, text: safe(text).slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true }));
 }
 export async function discordSend(c: ChannelConfig['discord'], text: string, fetchImpl: typeof fetch = fetch): Promise<SendResult> {
   if (!c.enabled) return 'off';

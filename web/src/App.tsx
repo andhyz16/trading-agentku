@@ -8,7 +8,7 @@ import { Reports } from './components/Reports';
 import { WorkspaceTools } from './components/WorkspaceTools';
 import { Tour } from './components/Tour';
 import { UpdateModal, type UpdateInfo } from './components/UpdateModal';
-import { TopBar, TickerStrip, FightMeter, Verdicts, Roster, TrakteerPopup, OpenOrders } from './components/Panels';
+import { TopBar, TickerStrip, FightMeter, Verdicts, Roster, OpenOrders } from './components/Panels';
 import { I18nProvider, useI18n } from './i18n';
 import './styles/dashboard-v2.css';
 
@@ -47,14 +47,6 @@ function AppInner() {
   const [tourOpen, setTourOpen] = useState<boolean>(initialTourOpen);
   const [updateOpen, setUpdateOpen] = useState<boolean>(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [trakteerOpen, setTrakteerOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setTrakteerOpen(true);
-    }, 60 * 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     const h = () => {
@@ -72,7 +64,7 @@ function AppInner() {
     try { localStorage.setItem('mpu_tour_done_v1', '1'); } catch { /* ignore */ }
   };
 
-  const anyModalOpen = Boolean(state) && (setup || updateOpen || tourOpen || trakteerOpen);
+  const anyModalOpen = Boolean(state) && (setup || updateOpen || tourOpen);
   useEffect(() => {
     document.documentElement.classList.toggle('modal-open', anyModalOpen);
     document.body.classList.toggle('modal-open', anyModalOpen);
@@ -149,12 +141,11 @@ function AppInner() {
         onTour={() => setTourOpen(true)}
         updateInfo={updateInfo}
         onOpenUpdate={() => setUpdateOpen(true)}
-        onOpenTrakteer={() => setTrakteerOpen(true)}
       />
       <TickerStrip state={state} />
       <main className="layout" id="office-workspace" tabIndex={-1}>
         <section className="stage">
-          <Office sceneEvents={sceneEvents} state={state} speech={speech} fights={fights} reactions={reactions} disagreement={dis} selected={selected} spark={spark} onSelect={setSelected} command={command} activeConversationId={activeConversationId} selectConversation={selectConversation} newConversation={newConversation} deleteConversation={deleteConversation} cendolBanner={cendolBanner} onDismissCendol={dismissCendolBanner}>
+          <Office sceneEvents={sceneEvents} state={state} speech={speech} fights={fights} reactions={reactions} disagreement={dis} selected={selected} spark={spark} onSelect={setSelected} command={command} activeConversationId={activeConversationId} selectConversation={selectConversation} newConversation={newConversation} deleteConversation={deleteConversation}>
             <FightMeter state={state} meter={meter} fighting={fights.length > 0} />
             <Verdicts state={state} compact />
             <OpenOrders state={state} command={command} />
@@ -173,7 +164,6 @@ function AppInner() {
       </main>
       {setup && <DeferredPanel label="Setup"><SetupWizard state={state} onClose={closeSetup} tradingProfile={setupEntry === '#setup-trading-default' ? 'default' : setupEntry === '#setup-trading-manual' ? 'manual' : undefined} /></DeferredPanel>}
       {updateOpen && <UpdateModal info={updateInfo} onRefresh={refreshUpdate} onClose={() => setUpdateOpen(false)} />}
-      {trakteerOpen && !tourOpen && !setup && !venueKeys && !updateOpen && <TrakteerPopup onClose={() => setTrakteerOpen(false)} onConfirmCendol={triggerCendolTip} />}
       {selected && <DeferredPanel label="Agent"><AgentPanel state={state} id={selected} onClose={() => setSelected(null)} command={command} conversationId={activeConversationId} onNewConversation={newConversation} onDeleteConversation={deleteConversation} /></DeferredPanel>}
       <Tour open={tourOpen && !setup && !venueKeys && !updateOpen} onClose={closeTour} />
       <footer className="footer">{t('footerNote')} Charts by <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts</a>.</footer>

@@ -111,6 +111,7 @@ export async function telegramSend(
     const payload: Record<string, unknown> = {
       chat_id: chatId,
       text: safe(text).slice(0, 4000),
+      parse_mode: 'HTML',
       disable_web_page_preview: true
     };
     if (replyMarkup) {
@@ -122,7 +123,25 @@ export async function telegramSend(
       {},
       fetchImpl
     );
-    return res.ok;
+    if (res.ok) return true;
+
+    // Fallback: if Telegram rejected due to unescaped HTML entities, send clean plain text without any tags
+    const cleanText = safe(text).replace(/<[^>]+>/g, '').slice(0, 4000);
+    const retryPayload: Record<string, unknown> = {
+      chat_id: chatId,
+      text: cleanText,
+      disable_web_page_preview: true
+    };
+    if (replyMarkup) {
+      retryPayload.reply_markup = replyMarkup;
+    }
+    const retryRes = await postJson(
+      `https://api.telegram.org/bot${token}/sendMessage`,
+      retryPayload,
+      {},
+      fetchImpl
+    );
+    return retryRes.ok;
   } catch (err) {
     console.error('[channels:telegram] delivery failed:', (err as Error).message);
     return false;

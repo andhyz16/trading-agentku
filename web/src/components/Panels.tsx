@@ -261,20 +261,6 @@ export function TopBar({
         )}
       </div>
       <div className="badges">
-        <button
-          type="button"
-          onClick={() => onOpenTrakteer?.()}
-          title={t('trakteerBtn')}
-          aria-label={t('trakteerBtn')}
-          className="trakteer-btn"
-        >
-          <img
-            src="https://edge-cdn.trakteer.id/images/embed/trbtn-icon.png?v=14-05-2025"
-            alt="Cendol"
-            className="trbtn-mini-img"
-          />
-          <span>Cendol</span>
-        </button>
         {state && onVenueKeys && <WalletMenu state={state} open={walletOpen} onOpen={onVenueKeys} onClose={onCloseWallet ?? (() => {})} />}
         {(onSetup || onTour) && <details className="settings-menu">
           <summary id="setup-trigger" className="badge setup-btn" aria-label={lang === 'id' ? 'Menu Setup' : 'Setup menu'}>
