@@ -792,9 +792,22 @@ export function createReplacementRuntime(
         const defaultAgent = settingsSnap?.effective?.agents?.lead;
 
         const upper = role.toUpperCase();
-        const rawProv = (configuredAgent?.provider ?? defaultAgent?.provider ?? env[`AGENT_${upper}_PROVIDER`] ?? env.DEFAULT_PROVIDER ?? '').trim().toLowerCase();
+        let rawProv = (configuredAgent?.provider ?? defaultAgent?.provider ?? env[`AGENT_${upper}_PROVIDER`] ?? env.DEFAULT_PROVIDER ?? '').trim().toLowerCase();
+        if (!rawProv || rawProv === 'mock' || rawProv === 'unconfigured') {
+          if ((env.GEMINI_API_KEY ?? '').trim()) rawProv = 'gemini';
+          else if ((env.DEEPSEEK_API_KEY ?? '').trim()) rawProv = 'deepseek';
+          else if ((env.OPENAI_API_KEY ?? '').trim()) rawProv = 'openai';
+          else if ((env.XAI_API_KEY ?? '').trim()) rawProv = 'xai';
+          else if ((env.ANTHROPIC_API_KEY ?? '').trim()) rawProv = 'anthropic';
+          else if ((env.OPENROUTER_API_KEY ?? '').trim()) rawProv = 'openrouter';
+        }
         const provider = rawProv && rawProv !== 'mock' ? rawProv : (rawProv === 'mock' ? 'mock' : 'unconfigured');
-        const model = (configuredAgent?.model ?? defaultAgent?.model ?? env[`AGENT_${upper}_MODEL`] ?? env.DEFAULT_MODEL ?? 'unconfigured').trim();
+        const defaultModelForProv = provider === 'gemini' ? (env.GEMINI_MODEL || 'gemini-2.0-flash') : provider === 'deepseek' ? (env.DEEPSEEK_MODEL || 'deepseek-chat') : provider === 'openai' ? (env.OPENAI_MODEL || 'gpt-4o-mini') : 'unconfigured';
+        const model = (configuredAgent?.model && configuredAgent.model !== 'unconfigured'
+          ? configuredAgent.model
+          : defaultAgent?.model && defaultAgent.model !== 'unconfigured'
+          ? defaultAgent.model
+          : env[`AGENT_${upper}_MODEL`] ?? env[`${provider.toUpperCase()}_MODEL`] ?? env.DEFAULT_MODEL ?? defaultModelForProv).trim();
         const reasoningEffort = configuredAgent?.reasoning ?? defaultAgent?.reasoning;
 
         const secretsMap = options.secrets?.readEnvMap() ?? env;

@@ -255,10 +255,20 @@ export class SettingsService {
       .filter((s) => s.length >= 2);
 
     const rawDefaultProvider = (env.DEFAULT_PROVIDER ?? '').trim().toLowerCase();
-    const defaultProvider: ModelProviderId =
+    let defaultProvider: ModelProviderId =
       rawDefaultProvider && (MODEL_PROVIDERS as readonly string[]).includes(rawDefaultProvider)
         ? (rawDefaultProvider as ModelProviderId)
         : 'unconfigured';
+
+    // Auto-detect provider if a real API key is configured but DEFAULT_PROVIDER is still unset or mock
+    if (defaultProvider === 'unconfigured' || defaultProvider === 'mock') {
+      if ((env.GEMINI_API_KEY ?? '').trim()) defaultProvider = 'gemini';
+      else if ((env.DEEPSEEK_API_KEY ?? '').trim()) defaultProvider = 'deepseek';
+      else if ((env.OPENAI_API_KEY ?? '').trim()) defaultProvider = 'openai';
+      else if ((env.XAI_API_KEY ?? '').trim()) defaultProvider = 'xai';
+      else if ((env.ANTHROPIC_API_KEY ?? '').trim()) defaultProvider = 'anthropic';
+      else if ((env.OPENROUTER_API_KEY ?? '').trim()) defaultProvider = 'openrouter';
+    }
 
     const resolveRoleConfig = (role: RoleId) => {
       const upper = role.toUpperCase();
