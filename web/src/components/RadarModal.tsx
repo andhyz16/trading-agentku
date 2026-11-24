@@ -27,18 +27,23 @@ export function RadarModal({
   onClose,
   onRefresh,
   onScanCustom,
+  onExecuteEntry,
   busy
 }: {
   data: RadarReportData;
   onClose: () => void;
   onRefresh: () => void;
   onScanCustom?: (symbolsText: string) => void;
+  onExecuteEntry?: (symbol: string, side: 'LONG' | 'SHORT', stop: number, tp: number) => Promise<{ ok: boolean; message?: string }>;
   busy?: boolean;
 }) {
   const items = data.items || [];
   const shortCount = items.filter((i) => i.status === 'LAYAK_SHORT').length;
   const longCount = items.filter((i) => i.status === 'LAYAK_LONG').length;
   const waitCount = items.filter((i) => i.status === 'WAIT').length;
+
+  const [executingSymbol, setExecutingSymbol] = useState<string | null>(null);
+  const [executedResults, setExecutedResults] = useState<Record<string, { ok: boolean; message?: string }>>({});
 
   const [selectedTokens, setSelectedTokens] = useState<string[]>(() => {
     const fromItems = items.map((i) =>
@@ -406,6 +411,112 @@ export function RadarModal({
                         {item.plan.riskReward}
                       </strong>
                     </div>
+                  </div>
+                )}
+
+                {/* 1-Click Execution Action */}
+                {item.plan && (isShort || isLong) && onExecuteEntry && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      padding: '12px 14px',
+                      background: isShort ? '#fff5f5' : '#f0fdf4',
+                      borderRadius: '8px',
+                      border: `1.5px solid ${isShort ? '#fecaca' : '#bbf7d0'}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          ⚡ Eksekusi Langsung Tanpa Tunggu Debat
+                        </span>
+                        <span style={{ fontSize: '11.5px', color: '#475569', fontWeight: 600 }}>
+                          Order langsung dipasang ke bursa dengan Stop Loss & Take Profit terpasang otomatis (RR 1:2).
+                        </span>
+                      </div>
+                      {executedResults[item.symbol]?.ok ? (
+                        <div
+                          style={{
+                            padding: '8px 16px',
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 4px rgba(22, 163, 74, 0.3)'
+                          }}
+                        >
+                          ✅ Posisi Berhasil Dibuka!
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={executingSymbol === item.symbol}
+                          onClick={async () => {
+                            if (!item.plan || executingSymbol) return;
+                            setExecutingSymbol(item.symbol);
+                            try {
+                              const res = await onExecuteEntry(
+                                item.symbol,
+                                isShort ? 'SHORT' : 'LONG',
+                                item.plan.stop,
+                                item.plan.tp
+                              );
+                              setExecutedResults((prev) => ({ ...prev, [item.symbol]: res }));
+                            } catch (err) {
+                              setExecutedResults((prev) => ({
+                                ...prev,
+                                [item.symbol]: { ok: false, message: err instanceof Error ? err.message : String(err) }
+                              }));
+                            } finally {
+                              setExecutingSymbol(null);
+                            }
+                          }}
+                          style={{
+                            padding: '9px 18px',
+                            borderRadius: '6px',
+                            background: isShort ? '#dc2626' : '#16a34a',
+                            color: '#ffffff',
+                            border: 'none',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            cursor: executingSymbol === item.symbol ? 'wait' : 'pointer',
+                            opacity: executingSymbol === item.symbol ? 0.7 : 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: `0 3px 6px ${isShort ? 'rgba(220, 38, 38, 0.3)' : 'rgba(22, 163, 74, 0.3)'}`,
+                            transition: 'all 0.15s ease-in-out'
+                          }}
+                        >
+                          {executingSymbol === item.symbol
+                            ? '⏳ Membuka Order…'
+                            : isShort
+                            ? `⚡ Eksekusi Entry SHORT (${item.symbol})`
+                            : `⚡ Eksekusi Entry LONG (${item.symbol})`}
+                        </button>
+                      )}
+                    </div>
+                    {executedResults[item.symbol] && !executedResults[item.symbol]?.ok && (
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          color: '#b91c1c',
+                          background: '#fee2e2',
+                          padding: '6px 10px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          border: '1px solid #fca5a5'
+                        }}
+                      >
+                        ⚠️ Gagal mengeksekusi: {executedResults[item.symbol]?.message}
+                      </div>
+                    )}
                   </div>
                 )}
 
