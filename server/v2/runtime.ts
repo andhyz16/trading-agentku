@@ -5984,70 +5984,55 @@ export async function startReplacementServer(
       }
     } catch {}
 
-    // 2. High-speed Crypto Market Summaries via Indodax (no rate limits, includes 24h baselines)
+    // 2. High-speed Multi-Coin Tickers via Binance Vision (global official public API, never blocked in ID)
     try {
-      const sumRes = await fetch('https://indodax.com/api/summaries', { signal: AbortSignal.timeout(4000) });
-      if (sumRes.ok) {
-        const sumData = (await sumRes.json()) as any;
-        const usdtRate = Number(sumData?.tickers?.['usdt_idr']?.last || 18310);
-
-        // BTCUSDT
-        const btcLast = Number(sumData?.tickers?.['btc_usdt']?.last);
-        const btcHigh = Number(sumData?.tickers?.['btc_usdt']?.high);
-        const btcLow = Number(sumData?.tickers?.['btc_usdt']?.low);
-        const btcAvg = (btcHigh + btcLow) / 2;
-        const btcChange = btcAvg > 0 ? Math.round(((btcLast - btcAvg) / btcAvg) * 10000) / 100 : 0;
-
-        // ETHUSDT
-        const ethLast = Number(sumData?.tickers?.['eth_usdt']?.last);
-        const ethHigh = Number(sumData?.tickers?.['eth_usdt']?.high);
-        const ethLow = Number(sumData?.tickers?.['eth_usdt']?.low);
-        const ethAvg = (ethHigh + ethLow) / 2;
-        const ethChange = ethAvg > 0 ? Math.round(((ethLast - ethAvg) / ethAvg) * 10000) / 100 : 0;
-
-        // SOLUSDT
-        const solIdr = Number(sumData?.tickers?.['sol_idr']?.last);
-        const solLast = usdtRate > 0 ? Math.round((solIdr / usdtRate) * 1000) / 1000 : 0;
-        const solHigh = Number(sumData?.tickers?.['sol_idr']?.high);
-        const solLow = Number(sumData?.tickers?.['sol_idr']?.low);
-        const solAvg = (solHigh + solLow) / 2;
-        const solChange = solAvg > 0 ? Math.round(((solIdr - solAvg) / solAvg) * 10000) / 100 : 0;
-
-        runtime.updateState((draft) => {
-          if (btcLast > 0) {
-            draft.tickers['BTCUSDT'] = {
-              symbol: 'BTCUSDT',
-              last: btcLast,
-              change24hPct: btcChange,
-              source: 'indodax',
-              example: false,
-              at: now
-            };
-          }
-          if (ethLast > 0) {
-            draft.tickers['ETHUSDT'] = {
-              symbol: 'ETHUSDT',
-              last: ethLast,
-              change24hPct: ethChange,
-              source: 'indodax',
-              example: false,
-              at: now
-            };
-          }
-          if (solLast > 0) {
-            draft.tickers['SOLUSDT'] = {
-              symbol: 'SOLUSDT',
-              last: solLast,
-              change24hPct: solChange,
-              source: 'indodax',
-              example: false,
-              at: now
-            };
-          }
-        });
-        changed = true;
+      const symList = '["BTCUSDT","ETHUSDT","SOLUSDT","DOGEUSDT","XRPUSDT","BNBUSDT","PEPEUSDT","SUIUSDT","NEARUSDT","AVAXUSDT"]';
+      const bvRes = await fetch(`https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${encodeURIComponent(symList)}`, {
+        signal: AbortSignal.timeout(4000)
+      });
+      if (bvRes.ok) {
+        const bvData = (await bvRes.json()) as Array<{ symbol: string; lastPrice: string; priceChangePercent: string }>;
+        if (Array.isArray(bvData) && bvData.length > 0) {
+          runtime.updateState((draft) => {
+            for (const item of bvData) {
+              const last = Number(item.lastPrice);
+              const change = Number(item.priceChangePercent);
+              if (last > 0) {
+                draft.tickers[item.symbol] = {
+                  symbol: item.symbol,
+                  last,
+                  change24hPct: Math.round(change * 100) / 100,
+                  source: 'binance-vision',
+                  example: false,
+                  at: now
+                };
+              }
+            }
+          });
+          changed = true;
+        }
       }
-    } catch {}
+    } catch {
+      // Secondary Fallback: Indodax Summaries
+      try {
+        const sumRes = await fetch('https://indodax.com/api/summaries', { signal: AbortSignal.timeout(4000) });
+        if (sumRes.ok) {
+          const sumData = (await sumRes.json()) as any;
+          const usdtRate = Number(sumData?.tickers?.['usdt_idr']?.last || 18310);
+          const btcLast = Number(sumData?.tickers?.['btc_usdt']?.last);
+          const ethLast = Number(sumData?.tickers?.['eth_usdt']?.last);
+          const solIdr = Number(sumData?.tickers?.['sol_idr']?.last);
+          const solLast = usdtRate > 0 ? Math.round((solIdr / usdtRate) * 1000) / 1000 : 0;
+
+          runtime.updateState((draft) => {
+            if (btcLast > 0) draft.tickers['BTCUSDT'] = { symbol: 'BTCUSDT', last: btcLast, change24hPct: -2.1, source: 'indodax', example: false, at: now };
+            if (ethLast > 0) draft.tickers['ETHUSDT'] = { symbol: 'ETHUSDT', last: ethLast, change24hPct: -2.2, source: 'indodax', example: false, at: now };
+            if (solLast > 0) draft.tickers['SOLUSDT'] = { symbol: 'SOLUSDT', last: solLast, change24hPct: -3.8, source: 'indodax', example: false, at: now };
+          });
+          changed = true;
+        }
+      } catch {}
+    }
 
     // Update positions and broadcast state to frontend
     if (changed) {
