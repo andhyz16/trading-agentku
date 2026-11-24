@@ -511,7 +511,7 @@ export function TickerStrip({ state }: { state: DeskState }) {
   if (!items.length) return <div className="ticker"><span className="muted">{t('waitingPrices')}</span></div>;
   const row = [...items, ...items, ...items];
   return (
-    <div className="ticker" aria-label="prices">
+    <div className="ticker" aria-label="prices" style={{ overflow: 'hidden', scrollbarWidth: 'none' }}>
       <div className="ticker-track">
         {row.map((tk, i) => (
           <span key={i} className={i >= items.length ? 'tick dup' : 'tick'}>

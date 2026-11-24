@@ -14,8 +14,9 @@
 .dashboard .badges { position: relative; gap: 7px; }
 .dashboard .topbar-restart-feedback { position: absolute; right: 0; top: calc(100% + 6px); z-index: 1600; max-width: min(320px, 90vw); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); color: var(--text); font-size: 12px; }
 .dashboard .badges > button, .dashboard .wallet-menu > button { min-height: 30px; border-radius: 8px; box-shadow: none; }
-.dashboard .ticker { height: 24px; border-width: 1px; border-radius: 9px; box-shadow: none; background: color-mix(in srgb, var(--panel) 70%, transparent); }
-.dashboard .ticker-track { animation-duration: 75s; }
+.dashboard .ticker { height: 32px; min-height: 32px; border-width: 1px; border-radius: 9px; box-shadow: none; background: color-mix(in srgb, var(--panel) 70%, transparent); overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; scrollbar-width: none !important; }
+.dashboard .ticker::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.dashboard .ticker-track { animation-duration: 75s; align-items: center; }
 .dashboard .layout { grid-template-columns: minmax(0, 1fr) 48px; gap: 10px; margin-top: 0; scroll-margin-top: 20px; }
 .dashboard .stage { gap: 8px; }
 .dashboard .workspace-section-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 20px; padding: 0 2px; }
@@ -135,8 +136,9 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard *, .dashboard *::before, .dashboard *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .dashboard .ticker-track { animation: none !important; flex-wrap: wrap; white-space: normal; row-gap: 3px; column-gap: 18px; padding: 0 12px; transform: none !important; }
-  .dashboard .ticker { height: auto; min-height: 24px; padding: 4px 0; overflow: hidden; mask-image: none; }
+  .dashboard .ticker-track { animation: none !important; flex-wrap: wrap; white-space: normal; row-gap: 3px; column-gap: 18px; padding: 4px 12px; transform: none !important; }
+  .dashboard .ticker { height: auto; min-height: 32px; padding: 4px 0; overflow: hidden !important; overflow-x: hidden !important; mask-image: none; scrollbar-width: none !important; }
+  .dashboard .ticker::-webkit-scrollbar { display: none !important; }
   .dashboard .ticker .tick.dup { display: none; }
   .dashboard .ticker .tick { white-space: nowrap; }
 }

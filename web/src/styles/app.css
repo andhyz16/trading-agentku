@@ -110,16 +110,18 @@ code { font-family: var(--font-mono); font-size: 0.9em; color: var(--wood-dark);
 .theme-toggle:hover { border-color: var(--wood); }
 
 /* ---------- ticker ---------- */
-.ticker { overflow: hidden; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); height: 24px; display: flex; align-items: center; box-shadow: var(--shadow); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
-.ticker-track { display: flex; gap: 24px; white-space: nowrap; animation: marquee 45s linear infinite; padding-left: 14px; }
-.tick { display: inline-flex; gap: 6px; align-items: baseline; font-size: 11px; }
+.ticker { overflow: hidden !important; overflow-x: hidden !important; overflow-y: hidden !important; scrollbar-width: none !important; -ms-overflow-style: none !important; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); height: 32px; min-height: 32px; display: flex; align-items: center; box-shadow: var(--shadow); mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.ticker::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+.ticker-track { display: flex; align-items: center; gap: 24px; white-space: nowrap; animation: marquee 45s linear infinite; padding-left: 14px; }
+.tick { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; line-height: 1; }
 .tick b { font-weight: 800; }
 .tick span { font-family: var(--font-mono); }
 .tick em { font-style: normal; font-weight: 700; font-family: var(--font-mono); }
 .tick small { color: var(--text-faint); font-size: 9px; }
 @keyframes marquee { to { transform: translateX(-33.333%); } }
 @media (prefers-reduced-motion: reduce) {
-  .ticker { height: auto; min-height: 24px; padding: 4px 0; mask-image: none; }
+  .ticker { height: auto; min-height: 32px; padding: 4px 0; mask-image: none; overflow: hidden !important; scrollbar-width: none !important; }
+  .ticker::-webkit-scrollbar { display: none !important; }
   .ticker-track { animation: none; flex-wrap: wrap; white-space: normal; row-gap: 3px; column-gap: 18px; padding: 0 12px; }
   .ticker .tick.dup { display: none; }
   .ticker .tick { white-space: nowrap; }

@@ -523,7 +523,10 @@ export class CycleRunner {
     }
 
     const typedRisk = riskResult as RiskRoleResult;
-    const desiredStance = leadResult.stance;
+    let desiredStance = leadResult.stance;
+    if ((!desiredStance || desiredStance === 'HOLD' || desiredStance === 'NEUTRAL') && resolvedCandidateSide) {
+      desiredStance = resolvedCandidateSide;
+    }
 
     if (input.policy.hasPosition && (desiredStance === 'LONG' || desiredStance === 'SHORT')) {
       return {

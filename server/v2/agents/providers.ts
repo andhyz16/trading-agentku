@@ -137,7 +137,13 @@ export function createOfficialProviderCaller(
           signal
         });
         if (!res.ok) {
-          throw new Error(`Provider ${provider} HTTP ${res.status}`);
+          let errDetail = '';
+          try {
+            const errText = await res.text();
+            errDetail = `: ${errText.slice(0, 300)}`;
+          } catch {}
+          console.error(`[PROVIDER_ERROR] ${provider} HTTP ${res.status}${errDetail}`);
+          throw new Error(`Provider ${provider} HTTP ${res.status}${errDetail}`);
         }
         return await res.json();
       } catch (err) {
@@ -173,23 +179,40 @@ export function createOfficialProviderCaller(
       }
 
       if (provider === 'gemini') {
+        let model = (req.model ?? '').replace(/^models\//, '').trim();
+        if (!model || model === 'unconfigured' || model === 'default' || model === 'gemini') {
+          model = 'gemini-2.0-flash';
+        }
         const base = (req.baseUrl ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
-        const url = `${base}/v1beta/models/${encodeURIComponent(req.model)}:generateContent`;
+        const cleanKey = (req.apiKey ?? '').trim();
+        const url = `${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
         const data = (await postJson(
           url,
-          { 'x-goog-api-key': req.apiKey },
+          { 'x-goog-api-key': cleanKey },
           {
             systemInstruction: { parts: [{ text: req.system }] },
             contents: [{ role: 'user', parts: [{ text: req.user }] }],
             generationConfig: {
-              temperature: 0.4,
+              temperature: 0.3,
               maxOutputTokens: 8192,
               responseMimeType: 'application/json'
             }
           }
-        )) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-        const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
-        if (!text) throw new Error('Gemini returned empty output');
+        )) as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+            finishReason?: string;
+          }>;
+          error?: { message?: string; code?: number };
+        };
+        if (data?.error) {
+          throw new Error(`Gemini API error: ${data.error.message ?? 'Unknown'}`);
+        }
+        const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
+        if (!text) {
+          const reason = data?.candidates?.[0]?.finishReason ?? 'no candidates';
+          throw new Error(`Gemini returned empty output (finishReason: ${reason})`);
+        }
         return text;
       }
 
