@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export interface RadarItem {
   symbol: string;
@@ -20,21 +20,60 @@ export interface RadarReportData {
   items: RadarItem[];
 }
 
+const POPULAR_CHIPS = ['BTC', 'ETH', 'SOL', 'XAU', 'DOGE', 'PEPE', 'XRP', 'BNB', 'SUI', 'NEAR'];
+
 export function RadarModal({
   data,
   onClose,
   onRefresh,
+  onScanCustom,
   busy
 }: {
   data: RadarReportData;
   onClose: () => void;
   onRefresh: () => void;
+  onScanCustom?: (symbolsText: string) => void;
   busy?: boolean;
 }) {
   const items = data.items || [];
   const shortCount = items.filter((i) => i.status === 'LAYAK_SHORT').length;
   const longCount = items.filter((i) => i.status === 'LAYAK_LONG').length;
   const waitCount = items.filter((i) => i.status === 'WAIT').length;
+
+  // Initialize selected symbols from current items or defaults
+  const [selectedTokens, setSelectedTokens] = useState<string[]>(() => {
+    const fromItems = items.map((i) =>
+      i.symbol.replace(/USDT$|USD$/, '').replace(/^XAU$/, 'XAU')
+    );
+    return fromItems.length > 0 ? fromItems : ['BTC', 'ETH', 'SOL', 'DOGE', 'XAU'];
+  });
+  const [customInput, setCustomInput] = useState('');
+
+  const toggleToken = (token: string) => {
+    const clean = token.toUpperCase().trim();
+    if (selectedTokens.includes(clean)) {
+      setSelectedTokens(selectedTokens.filter((t) => t !== clean));
+    } else {
+      if (selectedTokens.length >= 8) return; // Cap at 8 for speed
+      setSelectedTokens([...selectedTokens, clean]);
+    }
+  };
+
+  const handleCustomScan = () => {
+    const list = [...selectedTokens];
+    if (customInput.trim()) {
+      const extra = customInput
+        .split(/[\s,]+/)
+        .map((s) => s.toUpperCase().trim())
+        .filter(Boolean);
+      for (const e of extra) {
+        if (!list.includes(e)) list.push(e);
+      }
+    }
+    if (list.length > 0 && onScanCustom) {
+      onScanCustom(list.join(' '));
+    }
+  };
 
   const formatPrice = (p: number) => {
     if (p >= 100) {
@@ -51,8 +90,8 @@ export function RadarModal({
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(0, 0, 0, 0.78)',
+        backdropFilter: 'blur(5px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -67,13 +106,13 @@ export function RadarModal({
         className="panel"
         style={{
           width: '100%',
-          maxWidth: '780px',
-          maxHeight: '88vh',
+          maxWidth: '820px',
+          maxHeight: '90vh',
           background: 'var(--panel, #1e2022)',
           color: 'var(--text, #e2e8f0)',
-          borderRadius: '12px',
-          border: '1px solid var(--line, rgba(255, 255, 255, 0.12))',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+          borderRadius: '14px',
+          border: '1px solid var(--line, rgba(255, 255, 255, 0.14))',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.6)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -92,8 +131,8 @@ export function RadarModal({
         >
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '20px' }}>🎯</span>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700 }}>
+              <span style={{ fontSize: '22px' }}>🎯</span>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
                 Radar Pasar Scalping Multi-Koin
               </h3>
               <span
@@ -103,14 +142,14 @@ export function RadarModal({
                   borderRadius: '12px',
                   background: 'rgba(16, 185, 129, 0.15)',
                   color: '#10b981',
-                  fontWeight: 600
+                  fontWeight: 700
                 }}
               >
-                DRY RUN / 0% RISIKO
+                DRY RUN / BEBAS RESIKO
               </span>
             </div>
             <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-dim, #94a3b8)' }}>
-              Analisis pasar otomatis untuk {items.length} koin sekaligus tanpa membuka posisi order.
+              Pilih koin di bawah untuk memindai sinyal scalping serentak tanpa membuka order trading.
             </p>
           </div>
           <button
@@ -119,7 +158,7 @@ export function RadarModal({
               background: 'transparent',
               border: 'none',
               color: 'var(--text-dim, #94a3b8)',
-              fontSize: '22px',
+              fontSize: '24px',
               cursor: 'pointer',
               padding: '4px 8px',
               lineHeight: 1
@@ -130,25 +169,112 @@ export function RadarModal({
           </button>
         </div>
 
+        {/* Coin Selector Bar */}
+        <div
+          style={{
+            padding: '12px 20px',
+            background: 'rgba(0, 0, 0, 0.25)',
+            borderBottom: '1px solid var(--line, rgba(255, 255, 255, 0.08))',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '11.5px', fontWeight: 700, color: 'var(--text-dim, #94a3b8)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Pilih Koin Yang Ingin Di-Scan ({selectedTokens.length} dipilih):
+            </span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Klik chip untuk tambah/kurang</span>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+            {POPULAR_CHIPS.map((chip) => {
+              const active = selectedTokens.includes(chip);
+              return (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => toggleToken(chip)}
+                  style={{
+                    padding: '3px 10px',
+                    borderRadius: '16px',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    background: active ? '#10b981' : 'rgba(255, 255, 255, 0.06)',
+                    color: active ? '#ffffff' : 'var(--text-dim, #94a3b8)',
+                    border: active ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)'
+                  }}
+                >
+                  {active ? `✓ ${chip}` : `+ ${chip}`}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <input
+              type="text"
+              placeholder="Atau ketik koin lain (misal: PEPE XRP SUI)..."
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCustomScan();
+              }}
+              style={{
+                flex: 1,
+                fontSize: '12px',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.04)',
+                color: '#fff'
+              }}
+            />
+            <button
+              type="button"
+              disabled={busy || selectedTokens.length === 0}
+              onClick={handleCustomScan}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '6px',
+                background: '#059669',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '12px',
+                cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy ? 0.7 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              {busy ? 'Memindai…' : '🔍 Scan Koin Pilihan'}
+            </button>
+          </div>
+        </div>
+
         {/* Quick Summary Pill */}
         <div
           style={{
-            padding: '10px 20px',
-            background: 'rgba(0, 0, 0, 0.2)',
+            padding: '8px 20px',
+            background: 'rgba(0, 0, 0, 0.15)',
             display: 'flex',
-            gap: '12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            borderBottom: '1px solid var(--line, rgba(255, 255, 255, 0.06))'
+            gap: '14px',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            borderBottom: '1px solid var(--line, rgba(255, 255, 255, 0.05))'
           }}
         >
-          <span style={{ color: '#ef4444' }}>🔴 {shortCount} Peluang SHORT</span>
-          <span style={{ color: '#10b981' }}>🟢 {longCount} Peluang LONG</span>
+          <span style={{ color: '#ef4444' }}>🔴 {shortCount} Layak SHORT</span>
+          <span style={{ color: '#10b981' }}>🟢 {longCount} Layak LONG</span>
           <span style={{ color: '#94a3b8' }}>⚪ {waitCount} Wait / Konsolidasi</span>
         </div>
 
         {/* Scrollable Content */}
-        <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {items.map((item, idx) => {
             const isShort = item.status === 'LAYAK_SHORT';
             const isLong = item.status === 'LAYAK_LONG';
@@ -305,7 +431,7 @@ export function RadarModal({
                 fontWeight: 600
               }}
             >
-              {busy ? 'Scanning…' : '🔄 Scan Ulang'}
+              {busy ? 'Memindai…' : '🔄 Refresh Data'}
             </button>
             <button
               type="button"

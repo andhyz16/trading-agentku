@@ -133,6 +133,7 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           data={radarData}
           busy={radarBusy}
           onRefresh={() => void run('screen')}
+          onScanCustom={(symbolsText) => void run(`screen ${symbolsText}`)}
           onClose={() => setRadarData(null)}
         />
       )}
