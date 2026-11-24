@@ -3137,7 +3137,8 @@ export function createReplacementRuntime(
         }
       });
 
-      if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+      const isFromTelegram = input.conversationId === 'telegram' || /--notify-tg|--telegram\b/i.test(raw);
+      if (isFromTelegram && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
         void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, radarReport.formattedHtml, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
       }
 
