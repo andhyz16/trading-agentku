@@ -16,23 +16,32 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
   const [radarData, setRadarData] = useState<RadarReportData | null>(null);
   const [radarBusy, setRadarBusy] = useState(false);
 
+  const openRadar = async (customSymbols?: string) => {
+    const cmd = customSymbols ? `screen ${customSymbols}` : 'screen';
+    setRadarBusy(true);
+    if (!radarData) {
+      setRadarData({ at: Date.now(), items: [] });
+    }
+    try {
+      const res = (await command(cmd)) as any;
+      if (res && res.data?.items) {
+        setRadarData(res.data);
+        setReply(null);
+      } else if (res && res.reply) {
+        setReply(res);
+      }
+    } catch (err) {
+      setReply({ ok: false, reply: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setRadarBusy(false);
+    }
+  };
+
   const run = async (cmd: string) => {
     if (!cmd.trim()) return;
     if (/^(?:screen|radar)\b/i.test(cmd.trim())) {
-      setRadarBusy(true);
-      try {
-        const res = (await command(cmd)) as any;
-        if (res && res.data?.items) {
-          setRadarData(res.data);
-          setReply(null);
-        } else {
-          setReply(res);
-        }
-      } catch (err) {
-        setReply({ ok: false, reply: err instanceof Error ? err.message : String(err) });
-      } finally {
-        setRadarBusy(false);
-      }
+      const arg = cmd.replace(/^(?:screen|radar)\s*/i, '').trim();
+      await openRadar(arg || undefined);
       return;
     }
     setReply(await command(cmd));
@@ -64,7 +73,7 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
               gap: '4px'
             }}
             title="Radar Pasar Scalping Multi-Koin (Analisis 5 koin sekaligus tanpa entry order)"
-            onClick={() => run('screen')}
+            onClick={() => void openRadar()}
           >
             {radarBusy ? 'Scanning…' : '🎯 Radar 5 Koin'}
           </button>
@@ -132,8 +141,8 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
         <RadarModal
           data={radarData}
           busy={radarBusy}
-          onRefresh={() => void run('screen')}
-          onScanCustom={(symbolsText) => void run(`screen ${symbolsText}`)}
+          onRefresh={() => void openRadar()}
+          onScanCustom={(symbolsText) => void openRadar(symbolsText)}
           onClose={() => setRadarData(null)}
         />
       )}

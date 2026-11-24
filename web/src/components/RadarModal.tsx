@@ -275,6 +275,18 @@ export function RadarModal({
 
         {/* Scrollable Content */}
         <div style={{ padding: '16px 20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {items.length === 0 && busy && (
+            <div style={{ textAlign: 'center', padding: '50px 20px', color: '#94a3b8' }}>
+              <div style={{ fontSize: '28px', marginBottom: '10px' }}>⏳</div>
+              <strong style={{ fontSize: '15px', color: '#e2e8f0' }}>Sedang Memindai Pasar & Mengkalkulasi Tren...</strong>
+              <p style={{ fontSize: '12px', margin: '6px 0 0', color: '#64748b' }}>Menganalisis likuiditas, EMA, dan momentum scalping...</p>
+            </div>
+          )}
+          {items.length === 0 && !busy && (
+            <div style={{ textAlign: 'center', padding: '50px 20px', color: '#94a3b8' }}>
+              <p>Pilih koin di atas dan klik <strong>🔍 Scan Koin Pilihan</strong> untuk memulai.</p>
+            </div>
+          )}
           {items.map((item, idx) => {
             const isShort = item.status === 'LAYAK_SHORT';
             const isLong = item.status === 'LAYAK_LONG';

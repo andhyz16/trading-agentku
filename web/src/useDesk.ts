@@ -163,8 +163,8 @@ export function useDesk() {
   sessionId.current = state?.operationalChat?.id;
   const command = useCallback(async (text: string, agent?: AgentId, clientRequestId: string = crypto.randomUUID()) => {
     const res = await officeFetch('/api/command', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, agent, conversationId: conversationId.current, clientRequestId, operationalSessionId: sessionId.current }) }, 130_000);
-    const result = await res.json() as { ok: boolean; reply?: string; error?: string; command?: string; failureKind?: string; requestId?: string };
-    return { ok: res.ok && result.ok, reply: result.reply || result.error || 'Office request failed.', command: result.command || 'invalid', failureKind: result.failureKind, requestId: result.requestId };
+    const result = await res.json() as { ok: boolean; reply?: string; error?: string; command?: string; failureKind?: string; requestId?: string; data?: any };
+    return { ok: res.ok && result.ok, reply: result.reply || result.error || 'Office request failed.', command: result.command || 'invalid', failureKind: result.failureKind, requestId: result.requestId, data: result.data };
   }, []);
 
   return { state, connected, speech, fights, meter, reactions, cendolBanner, dismissCendolBanner, triggerCendolTip, sceneEvents, command, activeConversationId, selectConversation, newConversation, deleteConversation };
