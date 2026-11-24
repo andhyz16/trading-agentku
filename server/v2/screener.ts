@@ -41,6 +41,76 @@ export function normalizeSymbol(raw: string): string {
   return clean;
 }
 
+async function fetchPublicPrice(symbol: string, fetchImpl: typeof fetch): Promise<{ price: number; change24h: number }> {
+  // 1. Try Binance Vision (official global public endpoint, not blocked by Indonesian ISPs)
+  try {
+    const res = await fetchImpl(`https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${symbol}`, {
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { lastPrice?: string; priceChangePercent?: string };
+      if (data.lastPrice && Number(data.lastPrice) > 0) {
+        return {
+          price: Number(data.lastPrice),
+          change24h: Number(data.priceChangePercent ?? 0)
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Try CoinGecko public mapping
+  try {
+    const coinMap: Record<string, string> = {
+      BTCUSDT: 'bitcoin',
+      ETHUSDT: 'ethereum',
+      SOLUSDT: 'solana',
+      DOGEUSDT: 'dogecoin',
+      BNBUSDT: 'binancecoin',
+      XRPUSDT: 'ripple',
+      PEPEUSDT: 'pepe',
+      SUIUSDT: 'sui',
+      NEARUSDT: 'near'
+    };
+    const coinId = coinMap[symbol];
+    if (coinId) {
+      const res = await fetchImpl(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`, {
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, { usd?: number; usd_24h_change?: number }>;
+        if (data[coinId]?.usd) {
+          return {
+            price: Number(data[coinId].usd),
+            change24h: Number(data[coinId].usd_24h_change ?? 0)
+          };
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Try Indodax
+  try {
+    const baseSym = symbol.replace(/USDT$|USD$/, '').toLowerCase();
+    const res = await fetchImpl('https://indodax.com/api/ticker_all', {
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { tickers?: Record<string, { last?: string; high?: string; low?: string }> };
+      const rateUsdt = Number(data.tickers?.['usdt_idr']?.last || 18312);
+      const tokenTicker = data.tickers?.[`${baseSym}_idr`];
+      if (tokenTicker?.last && Number(tokenTicker.last) > 0 && rateUsdt > 0) {
+        const priceUsd = Number(tokenTicker.last) / rateUsdt;
+        return {
+          price: priceUsd,
+          change24h: 0
+        };
+      }
+    }
+  } catch {}
+
+  return { price: 0, change24h: 0 };
+}
+
 export async function runMarketRadar(
   rawSymbols: string[],
   tickers: Record<string, { last?: number; change24hPct?: number }>,
@@ -59,24 +129,16 @@ export async function runMarketRadar(
 
     // If ticker data is missing or stale, attempt quick public fetch
     if (!lastPrice || lastPrice <= 0) {
-      try {
-        if (symbol === 'XAUUSD' || symbol === 'XAUUSDT') {
-          const goldPrice = Number(tickers['XAUUSD']?.last || tickers['XAUUSDT']?.last || 3614.2);
-          lastPrice = goldPrice;
-          change24h = Number(tickers['XAUUSD']?.change24hPct ?? 0);
-        } else {
-          const res = await fetchImpl(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, {
-            signal: AbortSignal.timeout(3000)
-          });
-          if (res.ok) {
-            const data = (await res.json()) as { lastPrice?: string; priceChangePercent?: string };
-            if (data.lastPrice) lastPrice = Number(data.lastPrice);
-            if (data.priceChangePercent) change24h = Number(data.priceChangePercent);
-          }
+      if (symbol === 'XAUUSD' || symbol === 'XAUUSDT') {
+        const goldPrice = Number(tickers['XAUUSD']?.last || tickers['XAUUSDT']?.last || 3614.2);
+        lastPrice = goldPrice;
+        change24h = Number(tickers['XAUUSD']?.change24hPct ?? 0);
+      } else {
+        const pub = await fetchPublicPrice(symbol, fetchImpl);
+        if (pub.price > 0) {
+          lastPrice = pub.price;
+          change24h = pub.change24h;
         }
-      } catch {
-        // Fallback to existing ticker last or 0
-        lastPrice = Number(tickers[symbol]?.last ?? 0);
       }
     }
 
