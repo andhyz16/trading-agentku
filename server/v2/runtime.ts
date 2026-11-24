@@ -97,6 +97,7 @@ import {
   formatWatchlistCard
 } from './channel-text.js';
 import { readKill, writeKill, clearKill, DEFAULT_KILL_FILE } from './kill-file.js';
+import { runMarketRadar } from './screener.js';
 function normSymbol(s: string): string {
   const up = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!up) return '';
@@ -2777,7 +2778,7 @@ export function createReplacementRuntime(
     }
 
     const isSlash = raw.startsWith('/');
-    const isDirectOp = /^(close|kill|unkill|open|buy|sell|cancel|protect|analyze|debate|status|report|scan|positions|watchlist)\b/i.test(cleanCmd);
+    const isDirectOp = /^(close|kill|unkill|open|buy|sell|cancel|protect|analyze|debate|status|report|scan|positions|watchlist|screen|radar)\b/i.test(cleanCmd);
     const isOperational = isSlash || isDirectOp;
 
     const toAll = /^@all\s+/i.test(raw);
@@ -3081,6 +3082,32 @@ export function createReplacementRuntime(
         ok: true,
         command: 'scan',
         reply: safe(formatScanCard(findings.map((line) => line.replace(/^ALERTS: /, '🚨 '))))
+      };
+    }
+
+    if (cleanCmd === 'screen' || cleanCmd.startsWith('screen') || cleanCmd === 'radar' || cleanCmd.startsWith('radar')) {
+      const rawArgs = cleanCmd.replace(/^(?:screen|radar)\s*/i, '').trim();
+      let requestedSymbols: string[] = [];
+      if (rawArgs) {
+        requestedSymbols = rawArgs.split(/[\s,]+/).filter(Boolean);
+      }
+      if (requestedSymbols.length === 0) {
+        const snap = snapshot();
+        requestedSymbols = (snap.watchlist && snap.watchlist.length > 0)
+          ? snap.watchlist.slice(0, 5)
+          : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'XAUUSD'];
+      }
+
+      const radarReport = await runMarketRadar(requestedSymbols, snapshot().tickers, fetch);
+
+      if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+        void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, radarReport.formattedHtml, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+      }
+
+      return {
+        ok: true,
+        command: 'screen',
+        reply: radarReport.formattedText
       };
     }
 

@@ -27,6 +27,22 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           <button className="primary" disabled={!!state.debate || state.paused} onClick={() => run(`analyze ${symbol}`)}>
             {state.debate ? `${t('debatingPrefix')} ${state.debate.symbol}...` : t('startDebate')}
           </button>
+          <button
+            type="button"
+            className="radar-btn"
+            style={{
+              background: '#059669',
+              color: '#ffffff',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Radar Pasar Scalping Multi-Koin (Analisis 5 koin sekaligus tanpa entry order)"
+            onClick={() => run('screen')}
+          >
+            🎯 Radar 5 Koin
+          </button>
           <button onClick={() => run(state.paused ? 'resume' : 'pause')}>{state.paused ? t('resume') : t('pause')}</button>
           <button className="danger" onClick={() => run('close all')}>{t('closeAll')}</button>
           <button

@@ -724,6 +724,7 @@ export async function syncDiscordCommandsV2(
 
 export const TELEGRAM_BOT_COMMANDS = [
   { command: 'menu', description: 'Tampilkan tombol menu cepat (Quick Buttons)' },
+  { command: 'screen', description: 'Radar pasar scalping multi-koin (tanpa entry)' },
   { command: 'status', description: 'Balance, equity, venue, guards status' },
   { command: 'balance', description: 'Account balance, safety net & money trade' },
   { command: 'positions', description: 'Active positions and resting exchange stops' },
@@ -820,9 +821,9 @@ export async function syncWhatsAppCommandsV2(
 
 export const TELEGRAM_QUICK_KEYBOARD = {
   keyboard: [
-    [{ text: '📊 Status' }, { text: '📋 Report' }, { text: '💼 Positions' }],
+    [{ text: '🎯 Radar 5 Koin' }, { text: '📊 Status' }, { text: '💼 Positions' }],
     [{ text: '🥇 Analisa XAUUSD' }, { text: '🪙 Analisa BTCIDR' }, { text: '⚡ Analisa BTCUSDT' }],
-    [{ text: '🏆 Win Rate' }, { text: '🔎 Scan' }, { text: '❓ Help' }]
+    [{ text: '📋 Report' }, { text: '🏆 Win Rate' }, { text: '❓ Help' }]
   ],
   resize_keyboard: true,
   is_persistent: true
@@ -834,6 +835,7 @@ export function mapTelegramButtonToCommand(raw: string): string {
     .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]\s*/u, '')
     .trim();
 
+  if (/^(?:radar|screen)/i.test(normalized)) return '/screen';
   if (/^status$/i.test(normalized)) return '/status';
   if (/^report$/i.test(normalized)) return '/report';
   if (/^positions$/i.test(normalized)) return '/positions';
@@ -1055,6 +1057,7 @@ export const HELP_TEXT = [
   '🩺 /health  desk & venue connection status',
   '📌 /positions  stops and position PnL',
   '📋 /report  same Open PnL as the office',
+  '🎯 /screen [koin...]  radar scalping multi-koin (tanpa entry)',
   '🔎 /scan  alerts & protection checks',
   '👀 /watchlist  auto symbols & cycle',
   '📊 /scorecard  employee calls & win rate',
