@@ -111,6 +111,105 @@ async function fetchPublicPrice(symbol: string, fetchImpl: typeof fetch): Promis
   return { price: 0, change24h: 0 };
 }
 
+export const ALL_APP_SYMBOLS = [
+  'XAUUSD',
+  'BTCUSDT',
+  'ETHUSDT',
+  'SOLUSDT',
+  'DOGEUSDT',
+  'XRPUSDT',
+  'BNBUSDT',
+  'PEPEUSDT',
+  'SUIUSDT',
+  'NEARUSDT',
+  'AVAXUSDT',
+  'LINKUSDT',
+  'ADAUSDT'
+];
+
+export async function runDailyTop5Radar(
+  tickers: Record<string, { last?: number; change24hPct?: number }>,
+  fetchImpl: typeof fetch = fetch
+): Promise<MarketRadarReport> {
+  // Screen all coins available in the app universe
+  const fullReport = await runMarketRadar(ALL_APP_SYMBOLS, tickers, fetchImpl);
+
+  // Score and rank all items to find the TOP 5 coins with highest profit potential
+  const scored = [...fullReport.items].sort((a, b) => {
+    // Priority 1: Actionable setups (LAYAK_LONG or LAYAK_SHORT) beat WAIT
+    const aActionable = a.status !== 'WAIT' ? 1 : 0;
+    const bActionable = b.status !== 'WAIT' ? 1 : 0;
+    if (aActionable !== bActionable) return bActionable - aActionable;
+
+    // Priority 2: Higher confidence score
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+
+    // Priority 3: Clear momentum (higher absolute 24h price change)
+    return Math.abs(b.change24hPct) - Math.abs(a.change24hPct);
+  });
+
+  const top5 = scored.slice(0, 5);
+
+  const formatPrice = (p: number) => {
+    if (p >= 100) {
+      return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return p >= 1 ? p.toFixed(4) : p.toFixed(6);
+  };
+
+  const textLines: string[] = [
+    `🌅 REKOMENDASI 5 KOIN TERBAIK HARI INI (08:00 WITA) 🌅`,
+    `Diseleksi dari ${ALL_APP_SYMBOLS.length} instrumen pasar berdasarkan tren, momentum & peluang scalping cuan`,
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
+  ];
+
+  const htmlLines: string[] = [
+    `🌅 <b>REKOMENDASI 5 KOIN TERBAIK HARI INI (08:00 WITA)</b> 🌅\n<i>Hasil seleksi dari ${ALL_APP_SYMBOLS.length} instrumen pasar berdasarkan tren, momentum & peluang scalping cuan meja agen</i>\n━━━━━━━━━━━━━━━━━━━━`
+  ];
+
+  top5.forEach((item, index) => {
+    const badge = item.status === 'LAYAK_SHORT' ? '🔴' : item.status === 'LAYAK_LONG' ? '🟢' : '⚪';
+    const rankEmoji = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][index] ?? `${index + 1}.`;
+    const statusLabel =
+      item.status === 'LAYAK_SHORT'
+        ? 'LAYAK ENTRY (SHORT)'
+        : item.status === 'LAYAK_LONG'
+        ? 'LAYAK ENTRY (LONG)'
+        : 'NETRAL / WAIT (HOLD)';
+    const changeSign = item.change24hPct >= 0 ? '+' : '';
+    const changeStr = `${changeSign}${item.change24hPct.toFixed(2)}%`;
+
+    // Text representation
+    textLines.push(`\n${rankEmoji} ${badge} ${item.symbol}: ${statusLabel}`);
+    textLines.push(`   • Harga: $${formatPrice(item.price)} (${changeStr} 24h)`);
+    textLines.push(`   • Analisa: ${item.reason}`);
+    if (item.plan) {
+      textLines.push(`   • Rencana: Entry $${formatPrice(item.plan.entry)} | SL $${formatPrice(item.plan.stop)} | TP $${formatPrice(item.plan.tp)} (RR ${item.plan.riskReward})`);
+    }
+
+    // HTML representation
+    let itemHtml = `\n${rankEmoji} ${badge} <b>${item.symbol}: ${statusLabel}</b>\n` +
+      `• <b>Harga:</b> $${formatPrice(item.price)} (<code>${changeStr}</code> 24h)\n` +
+      `• <b>Analisa:</b> ${item.reason}`;
+    if (item.plan) {
+      itemHtml += `\n• <b>Rencana Scalp:</b> Entry <code>$${formatPrice(item.plan.entry)}</code> | SL <code>$${formatPrice(item.plan.stop)}</code> | TP <code>$${formatPrice(item.plan.tp)}</code> (RR ${item.plan.riskReward})`;
+    }
+    htmlLines.push(itemHtml);
+  });
+
+  textLines.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  textLines.push(`💡 Cara Eksekusi Cepat: Ketik langsung di chat, contoh: "eksekusi short XAUUSD" atau "eksekusi long SOLUSDT"`);
+
+  htmlLines.push(`\n━━━━━━━━━━━━━━━━━━━━\n💡 <b>Cara Eksekusi Cepat:</b> Ketik langsung di chat, contoh:\n<code>eksekusi short XAUUSD</code> atau <code>eksekusi long SOLUSDT</code>\n<i>(Stop Loss dan Take Profit akan dipasang otomatis dengan RR 1:2)</i>`);
+
+  return {
+    at: Date.now(),
+    items: top5,
+    formattedText: textLines.join('\n'),
+    formattedHtml: htmlLines.join('\n')
+  };
+}
+
 export async function runMarketRadar(
   rawSymbols: string[],
   tickers: Record<string, { last?: number; change24hPct?: number }>,
@@ -271,8 +370,9 @@ export async function runMarketRadar(
 
   textLines.push(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
   textLines.push(`💡 Status: Laporan analisa pasar saja. Tidak ada posisi trading yang dibuka.`);
+  textLines.push(`💡 Tips: Ketik "radar SOL ETH PEPE" untuk scan koin pilihan Anda sendiri, atau "radar pagi" untuk 5 koin terbaik.`);
 
-  htmlLines.push(`\n━━━━━━━━━━━━━━━━━━━━\n💡 <i>Status: Laporan analisa pasar saja. Tidak ada posisi trading yang dibuka.</i>`);
+  htmlLines.push(`\n━━━━━━━━━━━━━━━━━━━━\n💡 <i>Status: Laporan analisa pasar saja. Tidak ada posisi trading yang dibuka.</i>\n💡 <i>Tips: Ketik <code>radar SOL ETH PEPE</code> untuk scan koin pilihan Anda sendiri, atau <code>radar pagi</code> untuk 5 koin terbaik.</i>`);
 
   return {
     at: Date.now(),

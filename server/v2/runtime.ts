@@ -98,7 +98,7 @@ import {
   formatWatchlistCard
 } from './channel-text.js';
 import { readKill, writeKill, clearKill, DEFAULT_KILL_FILE } from './kill-file.js';
-import { runMarketRadar } from './screener.js';
+import { runMarketRadar, runDailyTop5Radar, ALL_APP_SYMBOLS } from './screener.js';
 function normSymbol(s: string): string {
   const up = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!up) return '';
@@ -3072,7 +3072,7 @@ export function createReplacementRuntime(
       return {
         ok: true,
         command: cleanCmd,
-        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• ⚡ Analisa ETHUSDT: Debat analisa Ethereum USDT\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya\n\nEksekusi order: ketik "eksekusi short XAUUSD" atau "eksekusi long BTCUSDT" (SL/TP otomatis RR 1:2).`
+        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat aktif di bawah layar. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 🎯 Radar 5 Koin: Scan peluang 5 koin unggulan\n• 📊 Status: Cek saldo & ringkasan akun\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• ⚡ Analisa ETHUSDT: Debat analisa Ethereum\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin\n• 📋 Report: Laporan performa trading\n• 🏆 Win Rate: Statistik akurasi sinyal\n• ❓ Help: Bantuan perintah lainnya\n\n💡 Perintah Ketik Praktis:\n• Radar Koin Pilihan: ketik "radar SOL ETH PEPE" (pilih koin apa saja!)\n• Radar Pagi 08:00 WITA: ketik "radar pagi" (rekomendasi 5 koin terbaik hari ini)\n• Eksekusi Instan: ketik "eksekusi short XAUUSD" atau "eksekusi long BTCUSDT"`
       };
     }
 
@@ -3157,18 +3157,24 @@ export function createReplacementRuntime(
 
     if (cleanCmd === 'screen' || cleanCmd.startsWith('screen') || cleanCmd === 'radar' || cleanCmd.startsWith('radar')) {
       const rawArgs = cleanCmd.replace(/^(?:screen|radar)\s*/i, '').trim();
-      let requestedSymbols: string[] = [];
-      if (rawArgs) {
-        requestedSymbols = rawArgs.split(/[\s,]+/).filter(Boolean);
-      }
-      if (requestedSymbols.length === 0) {
-        const snap = snapshot();
-        requestedSymbols = (snap.watchlist && snap.watchlist.length > 0)
-          ? snap.watchlist.slice(0, 5)
-          : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'XAUUSD'];
-      }
+      const isMorning = /^(morning|pagi|top5|rekomendasi)/i.test(rawArgs);
 
-      const radarReport = await runMarketRadar(requestedSymbols, snapshot().tickers, fetch);
+      let radarReport: import('./screener.js').MarketRadarReport;
+      if (isMorning) {
+        radarReport = await runDailyTop5Radar(snapshot().tickers, fetch);
+      } else {
+        let requestedSymbols: string[] = [];
+        if (rawArgs) {
+          requestedSymbols = rawArgs.split(/[\s,]+/).filter(Boolean);
+        }
+        if (requestedSymbols.length === 0) {
+          const snap = snapshot();
+          requestedSymbols = (snap.watchlist && snap.watchlist.length > 0)
+            ? snap.watchlist.slice(0, 5)
+            : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'DOGEUSDT', 'XAUUSD'];
+        }
+        radarReport = await runMarketRadar(requestedSymbols, snapshot().tickers, fetch);
+      }
 
       updateState((draft) => {
         for (const it of radarReport.items) {
@@ -3185,15 +3191,16 @@ export function createReplacementRuntime(
         }
       });
 
-      const isFromTelegram = input.conversationId === 'telegram' || /--notify-tg|--telegram\b/i.test(raw);
-      if (isFromTelegram && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+      const isFromTelegram = input.conversationId === 'telegram';
+      const hasNotifyFlag = /--notify-tg|--telegram\b/i.test(raw);
+      if (!isFromTelegram && hasNotifyFlag && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
         void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, radarReport.formattedHtml, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
       }
 
       return {
         ok: true,
         command: 'screen',
-        reply: radarReport.formattedText,
+        reply: isFromTelegram ? radarReport.formattedHtml : radarReport.formattedText,
         data: radarReport
       };
     }
@@ -5906,6 +5913,39 @@ export async function startReplacementServer(
       }
     }
   }
+
+  // Automated 08:00 WITA Morning Market Top 5 Radar Recommendation
+  let dailyRadarTimer: NodeJS.Timeout | null = null;
+  let lastDailyRadarKey = '';
+
+  const checkDailyMorningRadar = async () => {
+    try {
+      const activeToken = (env.TELEGRAM_BOT_TOKEN ?? '').trim();
+      const activeChatId = (env.TELEGRAM_CHAT_ID ?? '').trim();
+      if (!activeToken || !activeChatId) return;
+
+      // WITA is UTC+8 (Waktu Indonesia Tengah)
+      const now = new Date();
+      const witaDate = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      const witaHours = witaDate.getUTCHours();
+      const witaMinutes = witaDate.getUTCMinutes();
+      const todayKey = witaDate.toISOString().slice(0, 10); // YYYY-MM-DD
+
+      // Trigger daily at 08:00 WITA (08:00 - 08:01 window)
+      if (witaHours === 8 && witaMinutes === 0 && lastDailyRadarKey !== todayKey) {
+        lastDailyRadarKey = todayKey;
+        log('[channels:telegram] Running automated 08:00 WITA morning top-5 market screening...');
+        const morningReport = await runDailyTop5Radar(runtime.snapshot().tickers, fetch);
+        await telegramSend(activeToken, activeChatId, morningReport.formattedHtml, fetch, TELEGRAM_QUICK_KEYBOARD);
+        log('[channels:telegram] Automated 08:00 WITA morning top-5 report successfully delivered.');
+      }
+    } catch (err) {
+      console.error('[channels:telegram] Failed automated morning radar:', (err as Error).message);
+    }
+  };
+
+  dailyRadarTimer = setInterval(checkDailyMorningRadar, 25_000);
+  dailyRadarTimer.unref();
 
   if (startup.tradingMode !== 'PAPER') {
     void syncVenueAccount();

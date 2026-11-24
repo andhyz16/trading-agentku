@@ -835,7 +835,16 @@ export function mapTelegramButtonToCommand(raw: string): string {
     .replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]\s*/u, '')
     .trim();
 
-  if (/^(?:radar|screen)/i.test(normalized)) return '/screen';
+  if (/^(?:radar\s+pagi|rekomendasi(?:\s+pagi)?)$/i.test(normalized)) {
+    return '/screen morning';
+  }
+  if (/^(?:radar\s+5\s+koin|radar|screen)$/i.test(normalized)) {
+    return '/screen';
+  }
+  if (/^(?:radar|screen)\s+(.+)$/i.test(normalized)) {
+    const match = normalized.match(/^(?:radar|screen)\s+(.+)$/i);
+    return `/screen ${match ? match[1].trim() : ''}`;
+  }
   if (/^status$/i.test(normalized)) return '/status';
   if (/^report$/i.test(normalized)) return '/report';
   if (/^positions$/i.test(normalized)) return '/positions';
