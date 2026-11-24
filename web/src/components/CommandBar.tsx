@@ -4,15 +4,39 @@ import type { DeskState } from '../types';
 import { POPULAR_SYMBOLS } from '../types';
 import { useI18n } from '../i18n';
 import { SymbolSearchSelect } from './SymbolSearchSelect';
+import { RadarModal, type RadarReportData } from './RadarModal';
 
-export function CommandBar({ state, command }: { state: DeskState; command: (t: string) => Promise<{ ok: boolean; reply: string }> }) {
+export function CommandBar({ state, command }: { state: DeskState; command: (t: string) => Promise<{ ok: boolean; reply: string; data?: any }> }) {
   const { t } = useI18n();
   const [text, setText] = useState('');
   const [symbol, setSymbol] = useState(state.watchlist[0] ?? 'BTCUSDT');
   const [reply, setReply] = useState<{ ok: boolean; reply: string } | null>(null);
   const [killBusy, setKillBusy] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const run = async (cmd: string) => { if (!cmd.trim()) return; setReply(await command(cmd)); };
+  const [radarData, setRadarData] = useState<RadarReportData | null>(null);
+  const [radarBusy, setRadarBusy] = useState(false);
+
+  const run = async (cmd: string) => {
+    if (!cmd.trim()) return;
+    if (/^(?:screen|radar)\b/i.test(cmd.trim())) {
+      setRadarBusy(true);
+      try {
+        const res = (await command(cmd)) as any;
+        if (res && res.data?.items) {
+          setRadarData(res.data);
+          setReply(null);
+        } else {
+          setReply(res);
+        }
+      } catch (err) {
+        setReply({ ok: false, reply: err instanceof Error ? err.message : String(err) });
+      } finally {
+        setRadarBusy(false);
+      }
+      return;
+    }
+    setReply(await command(cmd));
+  };
   return (
     <div className="commandbar">
       <div className="cb-row">
@@ -30,6 +54,7 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           <button
             type="button"
             className="radar-btn"
+            disabled={radarBusy}
             style={{
               background: '#059669',
               color: '#ffffff',
@@ -41,7 +66,7 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
             title="Radar Pasar Scalping Multi-Koin (Analisis 5 koin sekaligus tanpa entry order)"
             onClick={() => run('screen')}
           >
-            🎯 Radar 5 Koin
+            {radarBusy ? 'Scanning…' : '🎯 Radar 5 Koin'}
           </button>
           <button onClick={() => run(state.paused ? 'resume' : 'pause')}>{state.paused ? t('resume') : t('pause')}</button>
           <button className="danger" onClick={() => run('close all')}>{t('closeAll')}</button>
@@ -86,7 +111,31 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           <button type="submit">{t('runBtn')}</button>
         </form>
       </div>
-      {reply && <div className={`cb-reply ${reply.ok ? '' : 'err'}`} onClick={() => setReply(null)}>{reply.reply}</div>}
+      {reply && (
+        <div
+          className={`cb-reply ${reply.ok ? '' : 'err'}`}
+          style={{
+            whiteSpace: 'pre-wrap',
+            textAlign: 'left',
+            maxHeight: '260px',
+            overflowY: 'auto',
+            lineHeight: '1.5',
+            fontFamily: 'var(--font-mono, monospace)',
+            padding: '10px 14px'
+          }}
+          onClick={() => setReply(null)}
+        >
+          {reply.reply}
+        </div>
+      )}
+      {radarData && (
+        <RadarModal
+          data={radarData}
+          busy={radarBusy}
+          onRefresh={() => void run('screen')}
+          onClose={() => setRadarData(null)}
+        />
+      )}
     </div>
   );
 }

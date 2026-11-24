@@ -2763,7 +2763,7 @@ export function createReplacementRuntime(
     clientRequestId?: string;
     conversationId?: string;
     symbol?: string;
-  }): Promise<{ ok: boolean; command?: string; reply?: string; error?: string }> => {
+  }): Promise<{ ok: boolean; command?: string; reply?: string; error?: string; data?: any }> => {
     let raw = input.text.trim();
     if (!raw) return { ok: false, error: 'empty command' };
     let cmd = raw.toLowerCase();
@@ -3107,7 +3107,8 @@ export function createReplacementRuntime(
       return {
         ok: true,
         command: 'screen',
-        reply: radarReport.formattedText
+        reply: radarReport.formattedText,
+        data: radarReport
       };
     }
 
