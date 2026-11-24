@@ -209,11 +209,11 @@ export function getRoleSchemaInstruction(role: RoleId): string {
   if (role === 'risk') {
     return `${toolHint}
 
-Respond strictly with a valid JSON object matching this schema:
+Respond strictly with a valid JSON object matching this schema (CATATAN: Field "reasoning" WAJIB 100% ditulis dalam Bahasa Indonesia!):
 {
   "decision": "APPROVE" | "REJECT",
   "stance": "LONG" | "SHORT" | "HOLD" | "CLOSE" | "NEUTRAL",
-  "reasoning": "Clear explanation of risk verdict in character (max 3 sentences)",
+  "reasoning": "Penjelasan keputusan risiko dalam Bahasa Indonesia yang lugas dan tegas (maksimal 2-3 kalimat)",
   "confidence": { "value": 0.0 to 1.0, "scale": "probability_0_1" },
   "claimRefs": [],
   "contraryRefs": []
@@ -223,10 +223,10 @@ Respond strictly with a valid JSON object matching this schema:
   if (role === 'lead') {
     return `${toolHint}
 
-Respond strictly with a valid JSON object matching this schema:
+Respond strictly with a valid JSON object matching this schema (CATATAN: Field "reasoning" WAJIB 100% ditulis dalam Bahasa Indonesia!):
 {
   "stance": "LONG" | "SHORT" | "HOLD" | "CLOSE",
-  "reasoning": "Executive decision synthesis in character (max 3 sentences)",
+  "reasoning": "Sintesis keputusan eksekutif dalam Bahasa Indonesia yang lugas dan profesional (maksimal 2-3 kalimat)",
   "confidence": { "value": 0.0 to 1.0, "scale": "probability_0_1" },
   "claimRefs": [],
   "contraryRefs": [],
@@ -239,10 +239,10 @@ Respond strictly with a valid JSON object matching this schema:
 
   return `${toolHint}
 
-Respond strictly with a valid JSON object matching this schema:
+Respond strictly with a valid JSON object matching this schema (CATATAN: Field "reasoning" WAJIB 100% ditulis dalam Bahasa Indonesia!):
 {
   "stance": "LONG" | "SHORT" | "HOLD" | "CLOSE" | "NEUTRAL",
-  "reasoning": "Analysis in character (max 3 sentences)",
+  "reasoning": "Analisa pasar dalam Bahasa Indonesia yang lugas, padat, dan profesional (maksimal 2-3 kalimat)",
   "confidence": { "value": 0.0 to 1.0, "scale": "probability_0_1" },
   "claimRefs": [],
   "contraryRefs": []
@@ -273,7 +273,9 @@ export class RoleRunner {
   /** Direct owner chat uses the same typed provider route as strategy roles, without a trade side effect. */
   async chat(input: { role: RoleId; prompt: string; configVersion: number; cycleId: string; deskContext?: string }): Promise<string> {
     const assignment = this.resolveAssignment(input.role, input.configVersion);
-    let user = input.deskContext ? `${input.deskContext}\n\n${input.prompt}` : input.prompt;
+    let user = input.deskContext
+      ? `${input.deskContext}\n\nInstruksi Bahasa: Jawab pertanyaan Boss berikut 100% dalam BAHASA INDONESIA!\n${input.prompt}`
+      : `Instruksi Bahasa: Jawab pertanyaan Boss berikut 100% dalam BAHASA INDONESIA!\n${input.prompt}`;
     const system = buildRoleSystemPrompt(input.role);
     let rawText = '';
 
@@ -476,7 +478,7 @@ export class RoleRunner {
     const remainingBudgetMs = Math.max(120_000, Math.min(300_000, task.deadlineAt - Date.now()));
     const system = buildRoleSystemPrompt(task.role);
     const schemaHint = getRoleSchemaInstruction(task.role);
-    let userPrompt = `${schemaHint}\n\nTask and Market Context:\n${JSON.stringify({
+    let userPrompt = `${schemaHint}\n\nTask and Market Context (INGAT: WAJIB tulis seluruh isi field 'reasoning' 100% dalam BAHASA INDONESIA yang lugas dan profesional!):\n${JSON.stringify({
       cycleId: task.cycleId,
       role: task.role,
       phase: task.phase,

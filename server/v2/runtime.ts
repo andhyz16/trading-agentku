@@ -2737,13 +2737,17 @@ export function createReplacementRuntime(
       try {
         const parsed = JSON.parse(candidate);
         if (parsed && typeof parsed === 'object') {
+          if (typeof parsed.chatResponse === 'string' && parsed.chatResponse) return parsed.chatResponse;
+          if (typeof parsed.response === 'string' && parsed.response) return parsed.response;
           if (typeof parsed.reply === 'string' && parsed.reply) return parsed.reply;
           if (typeof parsed.text === 'string' && parsed.text) return parsed.text;
           if (typeof parsed.message === 'string' && parsed.message) return parsed.message;
           if (typeof parsed.content === 'string' && parsed.content) return parsed.content;
+          if (typeof parsed.reason === 'string' && parsed.reason) return parsed.reason;
+          if (typeof parsed.reasoning === 'string' && parsed.reasoning) return parsed.reasoning;
         }
       } catch {
-        const fieldMatch = candidate.match(/"(?:reply|text|message|content)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"|\}\s*$)/i);
+        const fieldMatch = candidate.match(/"(?:chatResponse|response|reply|text|message|content|reason|reasoning)"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"|\}\s*$)/i);
         if (fieldMatch && fieldMatch[1]) {
           return fieldMatch[1].replace(/\\"/g, '"');
         }
