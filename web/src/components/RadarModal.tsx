@@ -34,7 +34,7 @@ export function RadarModal({
   onClose: () => void;
   onRefresh: () => void;
   onScanCustom?: (symbolsText: string) => void;
-  onExecuteEntry?: (symbol: string, side: 'LONG' | 'SHORT', stop: number, tp: number) => Promise<{ ok: boolean; message?: string }>;
+  onExecuteEntry?: (symbol: string, side: 'LONG' | 'SHORT', stop: number, tp: number, entry?: number) => Promise<{ ok: boolean; message?: string }>;
   busy?: boolean;
 }) {
   const items = data.items || [];
@@ -465,7 +465,8 @@ export function RadarModal({
                                 item.symbol,
                                 isShort ? 'SHORT' : 'LONG',
                                 item.plan.stop,
-                                item.plan.tp
+                                item.plan.tp,
+                                item.plan.entry
                               );
                               setExecutedResults((prev) => ({ ...prev, [item.symbol]: res }));
                             } catch (err) {

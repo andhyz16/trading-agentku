@@ -144,8 +144,11 @@ export function CommandBar({ state, command }: { state: DeskState; command: (t: 
           onRefresh={() => void openRadar()}
           onScanCustom={(symbolsText) => void openRadar(symbolsText)}
           onClose={() => setRadarData(null)}
-          onExecuteEntry={async (symbol, side, stop, tp) => {
-            const res = await command(`open ${symbol} ${side} --stop ${stop} --tp ${tp}`);
+          onExecuteEntry={async (symbol, side, stop, tp, entry) => {
+            const cmd = entry != null
+              ? `open ${symbol} ${side} --entry ${entry} --stop ${stop} --tp ${tp}`
+              : `open ${symbol} ${side} --stop ${stop} --tp ${tp}`;
+            const res = await command(cmd);
             if (res.reply) {
               setReply(res);
             }

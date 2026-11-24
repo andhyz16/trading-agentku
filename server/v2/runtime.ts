@@ -15,6 +15,7 @@ import {
   EXCHANGES,
   ROLE_IDS,
   unavailableEvidence,
+  verifiedEvidence,
   availableFinancialField,
   unavailableFinancialField,
   type AppMode,
@@ -3121,6 +3122,21 @@ export function createReplacementRuntime(
 
       const radarReport = await runMarketRadar(requestedSymbols, snapshot().tickers, fetch);
 
+      updateState((draft) => {
+        for (const it of radarReport.items) {
+          if (it.price > 0) {
+            draft.tickers[it.symbol] = {
+              symbol: it.symbol,
+              last: it.price,
+              change24hPct: it.change24hPct,
+              source: 'radar.screener',
+              example: false,
+              at: Date.now()
+            };
+          }
+        }
+      });
+
       if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
         void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, radarReport.formattedHtml, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
       }
@@ -3395,6 +3411,7 @@ export function createReplacementRuntime(
     if (/^(?:open|buy|sell)\b/i.test(cleanCmd) && !/^open\s+orders?\b/i.test(cleanCmd)) {
       const stopMatch = raw.match(/--stop(?:=|\s+)(\d+(?:\.\d+)?)/i);
       const tpMatch = raw.match(/--tp(?:=|\s+)(\d+(?:\.\d+)?)/i);
+      const entryMatch = raw.match(/--entry(?:=|\s+)(\d+(?:\.\d+)?)/i);
       const qtyMatch = raw.match(/--qty(?:=|\s+)(\d+(?:\.\d+)?)/i);
       const levMatch = raw.match(/(?:--leverage(?:=|\s+)|-l\s+)(\d+)/i) ?? raw.match(/\b(\d+)x\b/i);
 
@@ -3417,6 +3434,7 @@ export function createReplacementRuntime(
       const positional = cleanCmd
         .replace(/--stop(?:=|\s+)\S+/gi, '')
         .replace(/--tp(?:=|\s+)\S+/gi, '')
+        .replace(/--entry(?:=|\s+)\S+/gi, '')
         .replace(/--qty(?:=|\s+)\S+/gi, '')
         .replace(/(?:--leverage(?:=|\s+)|-l\s+)\S+/gi, '')
         .replace(/\b\d+x\b/gi, '')
@@ -3467,6 +3485,7 @@ export function createReplacementRuntime(
           side,
           stop: stopPrice,
           tp: tpMatch ? Number(tpMatch[1]) : null,
+          entry: entryMatch ? Number(entryMatch[1]) : undefined,
           qty: qtyMatch ? qtyMatch[1] : undefined,
           leverage: levMatch ? Number(levMatch[1]) : undefined
         }
@@ -4540,7 +4559,81 @@ export async function startReplacementServer(
         minEntryConfidencePct: snap.effective.trading.minEntryConfidencePct
       };
     },
-    readFreshMarket: (symbol) => marketHub.snapshot(symbol)
+    readFreshMarket: (symbol: string) => {
+      const snap = marketHub.snapshot(symbol);
+      if (snap && snap.last && snap.last.availability === 'AVAILABLE' && snap.last.value) {
+        return snap;
+      }
+      const norm = normSymbol(symbol);
+      if (norm !== symbol) {
+        const snapNorm = marketHub.snapshot(norm);
+        if (snapNorm && snapNorm.last && snapNorm.last.availability === 'AVAILABLE' && snapNorm.last.value) {
+          return snapNorm;
+        }
+      }
+      const t = runtimeRef?.snapshot().tickers[norm] ?? runtimeRef?.snapshot().tickers[symbol];
+      if (t && t.last && Number(t.last) > 0) {
+        const pStr = String(t.last);
+        const now = Date.now();
+        const emptyClosed = {
+          '1m': [],
+          '5m': [],
+          '15m': [],
+          '1h': [],
+          '4h': [],
+          '1d': []
+        };
+        return {
+          evidenceId: `market-fallback-${norm}-${now}`,
+          revision: 1,
+          symbol: norm,
+          venue: 'bybit' as const,
+          category: 'linear' as const,
+          asOf: now,
+          last: verifiedEvidence({
+            value: pStr,
+            source: t.source || 'market.ticker.fallback',
+            sourceAt: t.at || now,
+            observedAt: now,
+            unit: 'USDT'
+          }),
+          bid: verifiedEvidence({
+            value: pStr,
+            source: t.source || 'market.ticker.fallback',
+            sourceAt: t.at || now,
+            observedAt: now,
+            unit: 'USDT'
+          }),
+          ask: verifiedEvidence({
+            value: pStr,
+            source: t.source || 'market.ticker.fallback',
+            sourceAt: t.at || now,
+            observedAt: now,
+            unit: 'USDT'
+          }),
+          closed: emptyClosed,
+          current: {},
+          tradesEvidenceId: null,
+          bookEvidenceId: null,
+          funding: verifiedEvidence({
+            value: '0.0001',
+            source: 'market.ticker.fallback',
+            sourceAt: now,
+            observedAt: now,
+            unit: 'ratio'
+          }),
+          openInterest: verifiedEvidence({
+            value: '0',
+            source: 'market.ticker.fallback',
+            sourceAt: now,
+            observedAt: now,
+            unit: 'contracts'
+          }),
+          price24hPcnt: t.change24hPct != null ? String(t.change24hPct / 100) : null
+        };
+      }
+      return snap;
+    }
   });
 
   const killFile = env.KILL_SWITCH_FILE || DEFAULT_KILL_FILE;
@@ -4681,14 +4774,55 @@ export async function startReplacementServer(
 
     if (input.kind === 'open') {
       const p = input.payload ?? {};
-      const symbol = String(p.symbol ?? input.symbol ?? '').toUpperCase();
+      const rawSymbol = String(p.symbol ?? input.symbol ?? '').toUpperCase();
+      const norm = normSymbol(rawSymbol);
+      const symbol = norm || rawSymbol;
       const side = (p.side as 'LONG' | 'SHORT') ?? 'LONG';
-      const qty = String(p.qty ?? '0');
       const stop = p.stop ? String(p.stop) : null;
       const tp = p.tp ? String(p.tp) : null;
       const leverage = Number(p.leverage ?? state.trading?.values.maxLeverage ?? state.paper.maxLeverage ?? 5);
       const orderType = (p.orderType as 'MARKET' | 'LIMIT_GTC') ?? 'MARKET';
-      const limitPrice = p.limitPrice != null ? String(p.limitPrice) : (p.entry != null ? String(p.entry) : null);
+
+      const tickerPrice = Number(
+        p.entry ??
+        p.limitPrice ??
+        runtimeRef?.snapshot().tickers[symbol]?.last ??
+        runtimeRef?.snapshot().tickers[rawSymbol]?.last ??
+        0
+      );
+      const limitPrice = p.limitPrice != null ? String(p.limitPrice) : (tickerPrice > 0 ? String(tickerPrice) : null);
+
+      let qty = String(p.qty ?? '0');
+      if (!p.qty || Number(p.qty) <= 0) {
+        if (tickerPrice > 0) {
+          const allocUsdt = resolveOwnerPerOrderUsdt(state.paper);
+          const effectiveAlloc = allocUsdt > 0 ? allocUsdt : 100;
+          const rawQty = (effectiveAlloc * leverage) / tickerPrice;
+          if (symbol.startsWith('BTC')) {
+            qty = Math.max(0.001, Math.round(rawQty * 1000) / 1000).toFixed(3);
+          } else if (symbol.startsWith('ETH') || symbol.startsWith('XAU')) {
+            qty = Math.max(0.01, Math.round(rawQty * 100) / 100).toFixed(2);
+          } else {
+            qty = Math.max(1, Math.round(rawQty)).toFixed(0);
+          }
+        } else {
+          qty = '0.01';
+        }
+      }
+
+      // Ensure ticker is available in memory for gateway price verification
+      if (tickerPrice > 0 && !runtimeRef?.snapshot().tickers[symbol]?.last) {
+        runtimeRef?.updateState((d) => {
+          d.tickers[symbol] = {
+            symbol,
+            last: tickerPrice,
+            change24hPct: 0,
+            source: 'open.input',
+            example: false,
+            at: Date.now()
+          };
+        });
+      }
 
       const auth = await authority.claim(accountRef);
       const receipt = await gateway.submit({
@@ -4708,6 +4842,40 @@ export async function startReplacementServer(
         orderType,
         limitPrice
       });
+
+      if (receipt.orderState === 'FILLED' || receipt.orderState === 'ACCEPTED') {
+        const entryNum = Number(limitPrice ?? tickerPrice);
+        const stopNum = stop ? Number(stop) : null;
+        const tpNum = tp ? Number(tp) : null;
+        const qtyNum = Number(qty);
+        const margin = (qtyNum * entryNum) / leverage;
+        runtimeRef?.updateState((draft) => {
+          const existingIdx = draft.paper.positions.findIndex((pos) => pos.symbol === symbol);
+          const posObj = {
+            id: `pos-${Date.now()}`,
+            symbol,
+            side,
+            qty: qtyNum,
+            entry: entryNum,
+            stop: stopNum ?? (side === 'LONG' ? entryNum * 0.994 : entryNum * 1.006),
+            tp: tpNum,
+            margin: Number.isFinite(margin) ? Math.round(margin * 100) / 100 : 20,
+            leverage,
+            openedAt: Date.now(),
+            mark: entryNum,
+            unrealizedPnl: 0,
+            protectionStatus: 'confirmed' as const,
+            stopOnExchange: true,
+            trailingActive: false
+          };
+          if (existingIdx >= 0) {
+            draft.paper.positions[existingIdx] = posObj;
+          } else {
+            draft.paper.positions.push(posObj);
+          }
+          draft.paper.canOpen = draft.paper.positions.length < draft.paper.n;
+        });
+      }
 
       return {
         ok: receipt.orderState !== 'REJECTED',
