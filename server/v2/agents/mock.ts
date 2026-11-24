@@ -94,13 +94,18 @@ export async function generateMockAgentReply(req: MockAgentReplyRequest): Promis
 
     // Extract market summary metrics from prompt context
     let lastPrice = 75000;
-    let change24h = 2.5;
+    let change24h = 0;
     let symbol = 'BTCUSDT';
     try {
-      const mPrice = user.match(/"last"\s*:\s*([\d.]+)/);
+      const mPrice = user.match(/"(?:last|lastPrice|markPrice|entryPrice)"\s*:\s*"?([\d.]+)"?/);
       if (mPrice) lastPrice = Number(mPrice[1]);
-      const mChange = user.match(/"change24hPct"\s*:\s*([-\d.]+)/);
+      const mChange = user.match(/"(?:change24hPct|change24h|price24hPcnt)"\s*:\s*"?([-\d.]+)"?/);
       if (mChange) change24h = Number(mChange[1]);
+      const mTrend = user.match(/"(?:trend15m|marketTrend)"\s*:\s*"?(BEARISH|DOWNTREND|BULLISH|UPTREND)"?/i);
+      if (mTrend) {
+        if (/BEARISH|DOWNTREND/i.test(mTrend[1])) change24h = -1.5;
+        else if (/BULLISH|UPTREND/i.test(mTrend[1])) change24h = 1.5;
+      }
       const mSym = user.match(/"symbol"\s*:\s*"([^"]+)"/);
       if (mSym) symbol = mSym[1].toUpperCase();
     } catch {}
@@ -117,7 +122,7 @@ export async function generateMockAgentReply(req: MockAgentReplyRequest): Promis
       else lastPrice = 75000;
     }
 
-    const isBull = change24h >= 0;
+    const isBull = change24h > 0;
     const directionalStance: 'LONG' | 'SHORT' = isBull ? 'LONG' : 'SHORT';
     const oppositeStance: 'LONG' | 'SHORT' = isBull ? 'SHORT' : 'LONG';
     const stopRatio = isBull ? 0.975 : 1.025;
