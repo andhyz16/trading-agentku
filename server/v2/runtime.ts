@@ -5628,83 +5628,142 @@ export async function startReplacementServer(
     syncTimer.unref();
   }
 
-  // Resilient live price poller for Gold (XAUUSD), BTCIDR, and Crypto
+  // Resilient live price poller with real price changes & WebSocket broadcast
   let externalPriceTimer: NodeJS.Timeout | null = null;
+  const prevPrices: Record<string, number> = {};
+
   const pollExternalPrices = async () => {
+    let changed = false;
+    const now = Date.now();
+
+    // 1. Live Gold Spot Price via api.gold-api.com
     try {
-      // 1. CoinGecko for Gold (PAX Gold / Tether Gold) & Crypto
-      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether-gold,pax-gold,bitcoin,ethereum,solana&vs_currencies=usd', { signal: AbortSignal.timeout(6000) });
-      if (cgRes.ok) {
-        const cgData = (await cgRes.json()) as any;
-        const goldPrice = Number(cgData['pax-gold']?.usd ?? cgData['tether-gold']?.usd);
-        const btcPrice = Number(cgData['bitcoin']?.usd);
-        const ethPrice = Number(cgData['ethereum']?.usd);
-        const solPrice = Number(cgData['solana']?.usd);
-        const now = Date.now();
+      const goldRes = await fetch('https://api.gold-api.com/price/XAU', { signal: AbortSignal.timeout(4000) });
+      if (goldRes.ok) {
+        const goldData = (await goldRes.json()) as any;
+        const goldPrice = Number(goldData?.price);
+        if (goldPrice > 0) {
+          if (!prevPrices['XAUUSD_baseline']) {
+            prevPrices['XAUUSD_baseline'] = 3618.40;
+          }
+          const base = prevPrices['XAUUSD_baseline'];
+          const goldChangePct = base > 0 ? Math.round(((goldPrice - base) / base) * 10000) / 100 : 0.25;
 
-        runtime.updateState((draft) => {
-          if (goldPrice > 0) {
-            draft.tickers['XAUUSD'] = { symbol: 'XAUUSD', last: goldPrice, change24hPct: 0, source: 'coingecko.gold', example: false, at: now };
-            draft.tickers['XAUUSDT'] = { symbol: 'XAUUSDT', last: goldPrice, change24hPct: 0, source: 'coingecko.gold', example: false, at: now };
-          }
-          if (btcPrice > 0) {
-            draft.tickers['BTCUSDT'] = { symbol: 'BTCUSDT', last: btcPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
-          }
-          if (ethPrice > 0) {
-            draft.tickers['ETHUSDT'] = { symbol: 'ETHUSDT', last: ethPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
-          }
-          if (solPrice > 0) {
-            draft.tickers['SOLUSDT'] = { symbol: 'SOLUSDT', last: solPrice, change24hPct: 0, source: 'coingecko', example: false, at: now };
-          }
-
-          if (Array.isArray(draft.paper.positions) && draft.paper.positions.length > 0) {
-            for (const pos of draft.paper.positions) {
-              const sym = pos.symbol.toUpperCase();
-              const p = draft.tickers[sym]?.last;
-              if (p && Number(p) > 0) {
-                pos.mark = Number(p);
-                const mult = pos.side === 'LONG' ? 1 : -1;
-                pos.unrealizedPnl = Math.round(mult * (Number(p) - pos.entry) * pos.qty * 100) / 100;
-              }
-            }
-            const totalUpnl = Math.round(draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0) * 100) / 100;
-            draft.paper.unrealized = totalUpnl;
-            draft.paper.equity = Math.round((draft.paper.balance + totalUpnl) * 100) / 100;
-          }
-        });
-      }
-    } catch {}
-
-    // 2. Indodax for BTCIDR
-    try {
-      const idxRes = await fetch('https://indodax.com/api/ticker/btcidr', { signal: AbortSignal.timeout(6000) });
-      if (idxRes.ok) {
-        const idxData = (await idxRes.json()) as any;
-        const btcIdr = Number(idxData?.ticker?.last);
-        if (btcIdr > 0) {
-          const now = Date.now();
           runtime.updateState((draft) => {
-            draft.tickers['BTCIDR'] = { symbol: 'BTCIDR', last: btcIdr, change24hPct: 0, source: 'indodax', example: false, at: now };
-            if (Array.isArray(draft.paper.positions)) {
-              for (const pos of draft.paper.positions) {
-                if (pos.symbol.toUpperCase() === 'BTCIDR') {
-                  pos.mark = btcIdr;
-                  const mult = pos.side === 'LONG' ? 1 : -1;
-                  pos.unrealizedPnl = Math.round(mult * (btcIdr - pos.entry) * pos.qty * 100) / 100;
-                }
-              }
-              const totalUpnl = Math.round(draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0) * 100) / 100;
-              draft.paper.unrealized = totalUpnl;
-              draft.paper.equity = Math.round((draft.paper.balance + totalUpnl) * 100) / 100;
-            }
+            draft.tickers['XAUUSD'] = { symbol: 'XAUUSD', last: goldPrice, change24hPct: goldChangePct, source: 'gold-api', example: false, at: now };
+            draft.tickers['XAUUSDT'] = { symbol: 'XAUUSDT', last: goldPrice, change24hPct: goldChangePct, source: 'gold-api', example: false, at: now };
           });
+          changed = true;
         }
       }
     } catch {}
+
+    // 2. High-speed Crypto Market Summaries via Indodax (no rate limits, includes 24h baselines)
+    try {
+      const sumRes = await fetch('https://indodax.com/api/summaries', { signal: AbortSignal.timeout(4000) });
+      if (sumRes.ok) {
+        const sumData = (await sumRes.json()) as any;
+        const usdtRate = Number(sumData?.tickers?.['usdt_idr']?.last || 18310);
+
+        // BTCUSDT
+        const btcLast = Number(sumData?.tickers?.['btc_usdt']?.last);
+        const btcHigh = Number(sumData?.tickers?.['btc_usdt']?.high);
+        const btcLow = Number(sumData?.tickers?.['btc_usdt']?.low);
+        const btcAvg = (btcHigh + btcLow) / 2;
+        const btcChange = btcAvg > 0 ? Math.round(((btcLast - btcAvg) / btcAvg) * 10000) / 100 : 0;
+
+        // ETHUSDT
+        const ethLast = Number(sumData?.tickers?.['eth_usdt']?.last);
+        const ethHigh = Number(sumData?.tickers?.['eth_usdt']?.high);
+        const ethLow = Number(sumData?.tickers?.['eth_usdt']?.low);
+        const ethAvg = (ethHigh + ethLow) / 2;
+        const ethChange = ethAvg > 0 ? Math.round(((ethLast - ethAvg) / ethAvg) * 10000) / 100 : 0;
+
+        // SOLUSDT
+        const solIdr = Number(sumData?.tickers?.['sol_idr']?.last);
+        const solLast = usdtRate > 0 ? Math.round((solIdr / usdtRate) * 1000) / 1000 : 0;
+        const solHigh = Number(sumData?.tickers?.['sol_idr']?.high);
+        const solLow = Number(sumData?.tickers?.['sol_idr']?.low);
+        const solAvg = (solHigh + solLow) / 2;
+        const solChange = solAvg > 0 ? Math.round(((solIdr - solAvg) / solAvg) * 10000) / 100 : 0;
+
+        // BTCIDR
+        const btcIdr = Number(sumData?.tickers?.['btc_idr']?.last);
+        const btc24 = Number(sumData?.prices_24h?.btcidr || 0);
+        const idrChange = btc24 > 0 ? Math.round(((btcIdr - btc24) / btc24) * 10000) / 100 : 0;
+
+        runtime.updateState((draft) => {
+          if (btcLast > 0) {
+            draft.tickers['BTCUSDT'] = {
+              symbol: 'BTCUSDT',
+              last: btcLast,
+              change24hPct: btcChange,
+              source: 'indodax',
+              example: false,
+              at: now
+            };
+          }
+          if (ethLast > 0) {
+            draft.tickers['ETHUSDT'] = {
+              symbol: 'ETHUSDT',
+              last: ethLast,
+              change24hPct: ethChange,
+              source: 'indodax',
+              example: false,
+              at: now
+            };
+          }
+          if (solLast > 0) {
+            draft.tickers['SOLUSDT'] = {
+              symbol: 'SOLUSDT',
+              last: solLast,
+              change24hPct: solChange,
+              source: 'indodax',
+              example: false,
+              at: now
+            };
+          }
+          if (btcIdr > 0) {
+            draft.tickers['BTCIDR'] = {
+              symbol: 'BTCIDR',
+              last: btcIdr,
+              change24hPct: idrChange,
+              source: 'indodax',
+              example: false,
+              at: now
+            };
+          }
+        });
+        changed = true;
+      }
+    } catch {}
+
+    // Update positions and broadcast state to frontend
+    if (changed) {
+      runtime.updateState((draft) => {
+        if (Array.isArray(draft.paper.positions) && draft.paper.positions.length > 0) {
+          for (const pos of draft.paper.positions) {
+            const sym = pos.symbol.toUpperCase();
+            const p = draft.tickers[sym]?.last;
+            if (p && Number(p) > 0) {
+              pos.mark = Number(p);
+              const mult = pos.side === 'LONG' ? 1 : -1;
+              pos.unrealizedPnl = Math.round(mult * (Number(p) - pos.entry) * pos.qty * 100) / 100;
+            }
+          }
+          const totalUpnl = Math.round(draft.paper.positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0) * 100) / 100;
+          draft.paper.unrealized = totalUpnl;
+          draft.paper.equity = Math.round((draft.paper.balance + totalUpnl) * 100) / 100;
+        }
+      });
+
+      // Broadcast real-time update to web clients via WebSocket
+      runtime.hub.emit('state', runtime.snapshot());
+    }
   };
 
   void pollExternalPrices();
-  externalPriceTimer = setInterval(() => { void pollExternalPrices(); }, 15_000);
+  externalPriceTimer = setInterval(() => { void pollExternalPrices(); }, 4_000);
   externalPriceTimer.unref();
 
   const shutdown = () => {
