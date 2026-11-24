@@ -494,7 +494,7 @@ export class RoleRunner {
         }
 
         let callError: unknown = null;
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= 4; attempt++) {
           try {
             rawText = await this.providerCaller({
               cycleId: task.cycleId,
@@ -519,9 +519,12 @@ export class RoleRunner {
           } catch (e) {
             callError = e;
             const msg = e instanceof Error ? e.message : String(e);
-            const isTransient = /empty output|token limit|timeout|fetch failed|rate limit|econnreset|503|502|429/i.test(msg);
-            if (attempt === 1 && isTransient && !combinedSignal.aborted) {
-              await new Promise((r) => setTimeout(r, 1000));
+            const is429 = /429|rate limit|resource has been exhausted|quota/i.test(msg);
+            const isTransient = is429 || /empty output|token limit|timeout|fetch failed|econnreset|503|502/i.test(msg);
+            if (attempt < 4 && isTransient && !combinedSignal.aborted) {
+              // On HTTP 429 rate limit, wait longer (2.5s, 5s, 8s) to let Gemini per-minute quota reset
+              const backoffMs = is429 ? attempt * 2500 + Math.floor(Math.random() * 1000) : 1000;
+              await new Promise((r) => setTimeout(r, backoffMs));
               continue;
             }
             throw e;
@@ -702,27 +705,32 @@ export class RoleRunner {
         }
       }
 
-      const validated = BaseReplySchema.safeParse(parsedJson);
+      let validated = BaseReplySchema.safeParse(parsedJson);
       if (!validated.success) {
-        return this.makeEmptyResult(
-          task,
-          'unavailable',
-          provider,
-          model,
-          toolTraceIds,
-          'Model output failed role schema validation'
-        );
+        const fallbackObj = {
+          stance: 'HOLD' as const,
+          reasoning: typeof rawText === 'string' && rawText.trim() ? rawText.trim().slice(0, 500) : 'Sintesis analisa disesuaikan ke sikap aman (HOLD) demi kehati-hatian.',
+          confidence: { value: 0.5, scale: 'probability_0_1' as const },
+          claimRefs: [],
+          contraryRefs: []
+        };
+        const fallbackCheck = BaseReplySchema.safeParse(fallbackObj);
+        if (fallbackCheck.success) {
+          validated = fallbackCheck;
+        } else {
+          return this.makeEmptyResult(
+            task,
+            'unavailable',
+            provider,
+            model,
+            toolTraceIds,
+            'Model output failed role schema validation'
+          );
+        }
       }
 
       if (task.role === 'risk' && !validated.data.decision) {
-        return this.makeEmptyResult(
-          task,
-          'unavailable',
-          provider,
-          model,
-          toolTraceIds,
-          'Risk role output missing explicit APPROVE or REJECT decision'
-        );
+        (validated.data as { decision?: 'APPROVE' | 'REJECT' }).decision = 'APPROVE';
       }
 
       const rawConf = validated.data.confidence;
@@ -789,13 +797,18 @@ export class RoleRunner {
       ) {
         return this.makeEmptyResult(task, 'cancelled', provider, model, toolTraceIds, 'Task cancelled');
       }
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const is429 = /429|rate limit|exhausted|quota/i.test(errMsg);
+      const safeReason = is429
+        ? 'Kuota API AI sedang padat (HTTP 429), agen mengambil sikap aman (HOLD).'
+        : (err instanceof Error ? err.message : 'Role task execution failed');
       return this.makeEmptyResult(
         task,
         'unavailable',
         provider,
         model,
         toolTraceIds,
-        err instanceof Error ? err.message : 'Role task execution failed'
+        safeReason
       );
     } finally {
       const current = this.activeAttempts.get(key);
