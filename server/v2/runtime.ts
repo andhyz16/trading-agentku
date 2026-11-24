@@ -2811,6 +2811,42 @@ export function createReplacementRuntime(
       raw = raw.replace(/^(matikan|berhenti)\b/i, 'kill');
     }
 
+    // Friendly execution from chat (Telegram): "eksekusi short xauusd", "buy BTCUSDT", "entry long ethusdt".
+    // When no --stop is given, a stop and take profit are computed (RR 1:2) so every order still carries a stop.
+    // XAUUSD: SHORT = M15 (SL $5, TP $10); LONG = H4 analysis / H1 execution (SL $10, TP $20). Crypto: SL 0.6%, TP 1.2%.
+    if (/^(?:eksekusi|entry|masuk|open|buy|sell|long|short)\b/i.test(cleanCmd) && !/--stop\b/i.test(cleanCmd) && !/^open\s+orders?\b/i.test(cleanCmd)) {
+      const words = cleanCmd.split(/\s+/).slice(1);
+      const head = cleanCmd.split(/\s+/)[0];
+      let side: 'LONG' | 'SHORT' | null = head === 'buy' || head === 'long' ? 'LONG' : head === 'sell' || head === 'short' ? 'SHORT' : null;
+      let symWord = '';
+      for (const w of words) {
+        if (/^(long|buy|beli)$/i.test(w)) side = 'LONG';
+        else if (/^(short|sell|jual)$/i.test(w)) side = 'SHORT';
+        else if (!symWord && /^[a-z0-9]{2,15}$/i.test(w) && !/^\d+x?$/i.test(w)) symWord = w;
+      }
+      if (side && symWord) {
+        const sym = normSymbol(symWord);
+        const last = Number(snapshot().tickers[sym]?.last ?? 0);
+        if (!(last > 0)) {
+          return { ok: false, command: 'open', error: `Harga ${sym} belum tersedia dari feed. Coba lagi sebentar lagi.` };
+        }
+        const isGold = sym.startsWith('XAU');
+        const dp = isGold ? 2 : last >= 100 ? 2 : last >= 1 ? 4 : 8;
+        const slDist = isGold ? (side === 'SHORT' ? 5 : 10) : last * 0.006;
+        const tpDist = isGold ? (side === 'SHORT' ? 10 : 20) : last * 0.012;
+        const stop = side === 'LONG' ? last - slDist : last + slDist;
+        const tp = side === 'LONG' ? last + tpDist : last - tpDist;
+        raw = `open ${sym} ${side} --stop ${stop.toFixed(dp)} --tp ${tp.toFixed(dp)}`;
+        cleanCmd = raw.toLowerCase();
+      } else if (/^(?:eksekusi|entry|masuk)\b/i.test(cleanCmd)) {
+        return {
+          ok: false,
+          command: 'open',
+          error: 'Format: eksekusi <LONG|SHORT> <simbol>. Contoh: eksekusi short XAUUSD (SL/TP otomatis RR 1:2).'
+        };
+      }
+    }
+
     const isSlash = raw.startsWith('/');
     const isDirectOp = /^(close|kill|unkill|open|buy|sell|cancel|protect|analyze|debate|status|report|scan|positions|watchlist|screen|radar)\b/i.test(cleanCmd);
     const isOperational = isSlash || isDirectOp;
@@ -3036,7 +3072,7 @@ export function createReplacementRuntime(
       return {
         ok: true,
         command: cleanCmd,
-        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• ⚡ Analisa ETHUSDT: Debat analisa Ethereum USDT\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya`
+        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• ⚡ Analisa ETHUSDT: Debat analisa Ethereum USDT\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya\n\nEksekusi order: ketik "eksekusi short XAUUSD" atau "eksekusi long BTCUSDT" (SL/TP otomatis RR 1:2).`
       };
     }
 
@@ -5934,11 +5970,6 @@ export async function startReplacementServer(
         const solAvg = (solHigh + solLow) / 2;
         const solChange = solAvg > 0 ? Math.round(((solIdr - solAvg) / solAvg) * 10000) / 100 : 0;
 
-        // BTCIDR
-        const btcIdr = Number(sumData?.tickers?.['btc_idr']?.last);
-        const btc24 = Number(sumData?.prices_24h?.btcidr || 0);
-        const idrChange = btc24 > 0 ? Math.round(((btcIdr - btc24) / btc24) * 10000) / 100 : 0;
-
         runtime.updateState((draft) => {
           if (btcLast > 0) {
             draft.tickers['BTCUSDT'] = {
@@ -5965,16 +5996,6 @@ export async function startReplacementServer(
               symbol: 'SOLUSDT',
               last: solLast,
               change24hPct: solChange,
-              source: 'indodax',
-              example: false,
-              at: now
-            };
-          }
-          if (btcIdr > 0) {
-            draft.tickers['BTCIDR'] = {
-              symbol: 'BTCIDR',
-              last: btcIdr,
-              change24hPct: idrChange,
               source: 'indodax',
               example: false,
               at: now

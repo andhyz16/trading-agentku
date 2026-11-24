@@ -10,7 +10,7 @@ interface SymbolSearchSelectProps {
   className?: string;
 }
 
-export const DEFAULT_FAVORITES = ['XAUUSD', 'BTCIDR', 'XAUUSDT', 'BTCUSDT', 'ETHUSDT'];
+export const DEFAULT_FAVORITES = ['XAUUSD', 'XAUUSDT', 'BTCUSDT', 'ETHUSDT'];
 export const FAV_STORAGE_KEY = 'mpu_favorite_symbols_v1';
 export const FAV_EVENT_NAME = 'mpu_favorites_changed';
 
