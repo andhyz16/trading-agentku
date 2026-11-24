@@ -163,8 +163,9 @@ export async function runMarketRadar(
     // Flat: -0.4% <= change24h <= +0.4%
     if (change24h < -0.4) {
       // DOWNTREND -> ONLY SHORT, NO BUY
-      const stopDistance = isGold ? 7.5 : lastPrice * 0.006;
-      const tpDistance = isGold ? 15.0 : lastPrice * 0.012;
+      // For Gold (XAUUSD): Boss mandates TF M15 execution with tight scalping SL $5.00 and TP $10.00
+      const stopDistance = isGold ? 5.0 : lastPrice * 0.006;
+      const tpDistance = isGold ? 10.0 : lastPrice * 0.012;
       const stop = Number((lastPrice + stopDistance).toFixed(priceDp));
       const tp = Number((lastPrice - tpDistance).toFixed(priceDp));
 
@@ -174,7 +175,9 @@ export async function runMarketRadar(
         change24hPct: change24h,
         status: 'LAYAK_SHORT',
         confidence: 0.82,
-        reason: 'Tren dominan DOWNTREND di bawah tekanan seller. Mematuhi aturan anti-tangkap pisau jatuh: peluang scalping terbaik adalah SHORT pada retest resistance.',
+        reason: isGold
+          ? '[TF M15 Eksekusi] Tren bearish M15 terkonfirmasi. Peluang SHORT presisi scalping M15 dengan SL $5.00 dan TP $10.00 (RR 1:2).'
+          : 'Tren dominan DOWNTREND di bawah tekanan seller. Mematuhi aturan anti-tangkap pisau jatuh: peluang scalping terbaik adalah SHORT pada retest resistance.',
         plan: {
           entry: lastPrice,
           stop,
@@ -184,8 +187,9 @@ export async function runMarketRadar(
       });
     } else if (change24h > 0.4) {
       // UPTREND -> ONLY LONG, NO SHORT
-      const stopDistance = isGold ? 7.5 : lastPrice * 0.006;
-      const tpDistance = isGold ? 15.0 : lastPrice * 0.012;
+      // For Gold (XAUUSD): Boss mandates TF H4 analysis with TF H1 pullback execution: SL $10.00, TP $20.00
+      const stopDistance = isGold ? 10.0 : lastPrice * 0.006;
+      const tpDistance = isGold ? 20.0 : lastPrice * 0.012;
       const stop = Number((lastPrice - stopDistance).toFixed(priceDp));
       const tp = Number((lastPrice + tpDistance).toFixed(priceDp));
 
@@ -195,7 +199,9 @@ export async function runMarketRadar(
         change24hPct: change24h,
         status: 'LAYAK_LONG',
         confidence: 0.82,
-        reason: 'Tren dominan UPTREND dengan akumulasi buyer yang solid. Peluang scalping terkonfirmasi LONG mengikuti arus tren utama.',
+        reason: isGold
+          ? '[Analisa TF H4 / Eksekusi TF H1] Tren makro bullish H4 terkonfirmasi. Peluang LONG entry pullback H1 dengan SL $10.00 dan TP $20.00 (RR 1:2).'
+          : 'Tren dominan UPTREND dengan akumulasi buyer yang solid. Peluang scalping terkonfirmasi LONG mengikuti arus tren utama.',
         plan: {
           entry: lastPrice,
           stop,

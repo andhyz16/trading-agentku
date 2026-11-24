@@ -822,7 +822,7 @@ export async function syncWhatsAppCommandsV2(
 export const TELEGRAM_QUICK_KEYBOARD = {
   keyboard: [
     [{ text: '🎯 Radar 5 Koin' }, { text: '📊 Status' }, { text: '💼 Positions' }],
-    [{ text: '🥇 Analisa XAUUSD' }, { text: '🪙 Analisa BTCIDR' }, { text: '⚡ Analisa BTCUSDT' }],
+    [{ text: '🥇 Analisa XAUUSD' }, { text: '⚡ Analisa ETHUSDT' }, { text: '⚡ Analisa BTCUSDT' }],
     [{ text: '📋 Report' }, { text: '🏆 Win Rate' }, { text: '❓ Help' }]
   ],
   resize_keyboard: true,

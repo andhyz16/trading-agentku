@@ -272,10 +272,14 @@ export class CycleRunner {
     };
 
     try {
+      const isTestEnv = Boolean(process.env.VITEST || process.env.NODE_ENV === 'test');
+      const paceMs = isTestEnv ? 0 : 500;
+
       // 1. Observe phase across the 3 analyst roles.
-      const observeResults = await Promise.all(
-      ANALYST_ROLES.map((role) =>
-        runRole({
+      const observeResults: RoleResult[] = [];
+      for (const role of ANALYST_ROLES) {
+        if (input.signal?.aborted) break;
+        const res = await runRole({
           cycleId,
           role,
           phase: 'observe',
@@ -290,27 +294,31 @@ export class CycleRunner {
             marketSummary: input.marketSummary,
             policy: input.policy
           }
-        })
-      )
-    );
-    roleResults.push(...observeResults);
+        });
+        observeResults.push(res);
+        if (paceMs > 0) {
+          await new Promise((r) => setTimeout(r, paceMs));
+        }
+      }
+      roleResults.push(...observeResults);
 
-    // 2. Optional Jev evidence review (never a seventh role or permission gate).
-    let jevReview: JevReview | null = null;
-    if (this.jevClient) {
-      jevReview = await this.jevClient.review({
-        cycleId,
-        symbol: input.symbol,
-        evidenceId: input.evidenceId,
-        state: buildCleanJevState(input.marketSummary, observeResults)
-      });
-    }
-    const jevReviewId = jevReview?.status === 'completed' ? jevReview.reviewId : null;
+      // 2. Optional Jev evidence review (never a seventh role or permission gate).
+      let jevReview: JevReview | null = null;
+      if (this.jevClient) {
+        jevReview = await this.jevClient.review({
+          cycleId,
+          symbol: input.symbol,
+          evidenceId: input.evidenceId,
+          state: buildCleanJevState(input.marketSummary, observeResults)
+        });
+      }
+      const jevReviewId = jevReview?.status === 'completed' ? jevReview.reviewId : null;
 
-    // 3. Structured challenge phase across the 3 analyst roles with visible observations + Jev review.
-    const challengeResults = await Promise.all(
-      ANALYST_ROLES.map((role) =>
-        runRole({
+      // 3. Structured challenge phase across the 3 analyst roles with visible observations + Jev review.
+      const challengeResults: RoleResult[] = [];
+      for (const role of ANALYST_ROLES) {
+        if (input.signal?.aborted) break;
+        const res = await runRole({
           cycleId,
           role,
           phase: 'challenge',
@@ -327,31 +335,37 @@ export class CycleRunner {
             jevReview,
             policy: input.policy
           }
-        })
-      )
-    );
-    roleResults.push(...challengeResults);
-
-    // 4. Execution proposes the candidate order, then Risk evaluates that candidate.
-    const executionResult = await runRole({
-      cycleId,
-      role: 'execution',
-      phase: 'final',
-      taskAttempt: 1,
-      evidenceId: input.evidenceId,
-      configVersion: input.configVersion,
-      accountRef: input.accountRef,
-      route: routeOf('execution'),
-      deadlineAt,
-      symbol: input.symbol,
-      promptContext: {
-        marketSummary: input.marketSummary,
-        observations: observeResults.map(toPeerDigest),
-        challenges: challengeResults.map(toPeerDigest),
-        jevReview,
-        policy: input.policy
+        });
+        challengeResults.push(res);
+        if (paceMs > 0) {
+          await new Promise((r) => setTimeout(r, paceMs));
+        }
       }
-    });
+      roleResults.push(...challengeResults);
+
+      // 4. Execution proposes the candidate order, then Risk evaluates that candidate.
+      const executionResult = await runRole({
+        cycleId,
+        role: 'execution',
+        phase: 'final',
+        taskAttempt: 1,
+        evidenceId: input.evidenceId,
+        configVersion: input.configVersion,
+        accountRef: input.accountRef,
+        route: routeOf('execution'),
+        deadlineAt,
+        symbol: input.symbol,
+        promptContext: {
+          marketSummary: input.marketSummary,
+          observations: observeResults.map(toPeerDigest),
+          challenges: challengeResults.map(toPeerDigest),
+          jevReview,
+          policy: input.policy
+        }
+      });
+      if (paceMs > 0) {
+        await new Promise((r) => setTimeout(r, paceMs));
+      }
     const executionSide = ticketSide(executionResult.stance);
     let resolvedCandidateSide = executionSide;
     if (!resolvedCandidateSide) {

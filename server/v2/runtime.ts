@@ -2043,11 +2043,17 @@ export function createReplacementRuntime(
           const isGold = targetSymbol.toUpperCase().startsWith('XAU');
           const priceDp = isGold ? 2 : entryPrice >= 100 ? 2 : entryPrice >= 1 ? 4 : 8;
 
-          // Pure Fast Scalping (M1-M15) SL & TP logic with guaranteed RR 1:2
-          // For Gold (XAUUSD): SL is $6.00, TP is $12.00 (RR 1:2)
+          // Pure Fast Scalping SL & TP logic with guaranteed RR 1:2
+          // For Gold (XAUUSD):
+          // - SHORT: TF M15 execution -> tight scalping SL $5.00, TP $10.00 (RR 1:2)
+          // - LONG: TF H4 analysis / TF H1 execution -> SL $10.00, TP $20.00 (RR 1:2)
           // For Crypto (BTC, ETH, etc.): SL is 0.6%, TP is 1.2% (RR 1:2)
-          const defaultSlDistance = isGold ? 6.0 : entryPrice * 0.006;
-          const defaultTpDistance = isGold ? 12.0 : entryPrice * 0.012;
+          const defaultSlDistance = isGold
+            ? (side === 'SHORT' ? 5.0 : 10.0)
+            : entryPrice * 0.006;
+          const defaultTpDistance = isGold
+            ? (side === 'SHORT' ? 10.0 : 20.0)
+            : entryPrice * 0.012;
 
           let stopPrice: number;
           let tpPrice: number;
@@ -2732,9 +2738,15 @@ export function createReplacementRuntime(
 
       return lastResult ?? { ok: true, message: 'All watchlist symbols evaluated successfully.' };
     } finally {
-      if (lastFightAt && Date.now() - lastFightAt < 2500) {
-        const remainingDelay = Math.max(200, 2500 - (Date.now() - lastFightAt));
-        await new Promise((resolve) => setTimeout(resolve, remainingDelay));
+      const isTestEnv = Boolean(process.env.VITEST || process.env.NODE_ENV === 'test');
+      if (!isTestEnv) {
+        if (lastFightAt && Date.now() - lastFightAt < 2500) {
+          const remainingDelay = Math.max(200, 2500 - (Date.now() - lastFightAt));
+          await new Promise((resolve) => setTimeout(resolve, remainingDelay));
+        } else {
+          // Keep debate verdict and agent speech visible for 3 seconds on the office table
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
       }
       updateState((draft) => {
         draft.debate = null;
@@ -3024,7 +3036,7 @@ export function createReplacementRuntime(
       return {
         ok: true,
         command: cleanCmd,
-        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• 🪙 Analisa BTCIDR: Debat analisa Bitcoin Rupiah\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya`
+        reply: `Halo! Selamat datang di Trading Agentku 🤖✨\n\nTombol menu cepat sudah aktif di bawah layar Anda. Cukup sentuh tombol tanpa perlu mengetik:\n\n• 📊 Status: Cek saldo & ringkasan akun\n• 📋 Report: Laporan performa trading\n• 💼 Positions: Posisi terbuka & Stop Loss\n• 🥇 Analisa XAUUSD: Debat analisa Emas (Gold)\n• ⚡ Analisa ETHUSDT: Debat analisa Ethereum USDT\n• ⚡ Analisa BTCUSDT: Debat analisa Bitcoin USDT\n• 🔎 Scan: Scan peluang pasar\n• 🛡️ Health: Cek status koneksi\n• ❓ Help: Bantuan perintah lainnya`
       };
     }
 
