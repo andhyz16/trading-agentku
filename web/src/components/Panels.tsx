@@ -514,7 +514,7 @@ export function TickerStrip({ state }: { state: DeskState }) {
     <div className="ticker" aria-label="prices">
       <div className="ticker-track">
         {row.map((tk, i) => (
-          <span key={i} className="tick">
+          <span key={i} className={i >= items.length ? 'tick dup' : 'tick'}>
             <b>{tk.symbol}</b>
             <span>{fmtPx(tk.last)}</span>
             <em className={tk.change24hPct >= 0 ? 'up' : 'down'}>{tk.change24hPct >= 0 ? '▲' : '▼'} {fmt(Math.abs(tk.change24hPct))}%</em>

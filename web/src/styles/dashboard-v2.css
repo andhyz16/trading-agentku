@@ -135,6 +135,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard *, .dashboard *::before, .dashboard *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
-  .dashboard .ticker-track { animation: none !important; }
-  .dashboard .ticker { overflow-x: auto; mask-image: none; }
+  .dashboard .ticker-track { animation: none !important; flex-wrap: wrap; white-space: normal; row-gap: 3px; column-gap: 18px; padding: 0 12px; transform: none !important; }
+  .dashboard .ticker { height: auto; min-height: 24px; padding: 4px 0; overflow: hidden; mask-image: none; }
+  .dashboard .ticker .tick.dup { display: none; }
+  .dashboard .ticker .tick { white-space: nowrap; }
 }
