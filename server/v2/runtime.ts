@@ -5881,6 +5881,9 @@ export async function startReplacementServer(
       log(`[channels:telegram] Bot commands sync deferred: ${(err as Error).message}`);
     });
 
+    if (!commandsEnabled || !tgChatId) {
+      log(`[channels:telegram] Inbound commands NOT started: ${!commandsEnabled ? 'CHANNEL_COMMANDS is not "on"' : 'TELEGRAM_CHAT_ID is empty'}. The bot can send alerts but will not answer buttons.`);
+    }
     if (commandsEnabled && tgChatId) {
       try {
         telegramPoller = new TelegramPoller(

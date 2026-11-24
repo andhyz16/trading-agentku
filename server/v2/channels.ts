@@ -885,7 +885,15 @@ export class TelegramPoller {
       try {
         const url = `https://api.telegram.org/bot${this.token}/getUpdates?timeout=25&offset=${this.offset}&allowed_updates=["message"]`;
         const res = await this.fetchImpl(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(35_000)]) });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          if (res.status === 409) {
+            throw new Error('HTTP 409 Conflict: another copy of this desk (or a webhook) is reading the same Telegram bot token. Stop the other copy (e.g. the laptop) so only one computer runs the bot.');
+          }
+          if (res.status === 401) {
+            throw new Error('HTTP 401: TELEGRAM_BOT_TOKEN is invalid.');
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = (await res.json()) as {
           ok?: boolean;
           result?: Array<{
@@ -905,6 +913,7 @@ export class TelegramPoller {
             const fromChat = String(m.chat?.id ?? '');
             const fromUser = String(m.from?.id ?? '');
             if (fromChat !== this.chatId || (this.allowedUsers.length > 0 && !this.allowedUsers.includes(fromUser))) {
+              console.warn(`[channels:telegram] Ignored a message from chat ${fromChat} / user ${fromUser}: it does not match TELEGRAM_CHAT_ID or TELEGRAM_ALLOWED_USER_IDS.`);
               continue;
             }
             const cmdToExec = mapTelegramButtonToCommand(m.text);
@@ -918,6 +927,9 @@ export class TelegramPoller {
       } catch (err) {
         if (signal.aborted) break;
         failures++;
+        if (failures === 1 || failures % 10 === 0) {
+          console.warn(`[channels:telegram] Inbound poll failed (${failures}x): ${(err as Error).message}`);
+        }
         const backoff = Math.min(60_000, 5000 * Math.min(failures, 6));
         await new Promise((r) => setTimeout(r, backoff));
       }
