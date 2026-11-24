@@ -2039,36 +2039,57 @@ export function createReplacementRuntime(
             ? Number(thesisLimit)
             : Number(currentSnap.tickers[targetSymbol]?.last ?? out.verdict.thesis.stop);
 
-          const stopPct = currentSnap.trading?.values.defaultStopPct ?? currentSnap.paper.defaultStopPct ?? 30;
-          const stopPricePct = stopPct / 100;
-          const tpPct = currentSnap.trading?.values.takeProfitPct ?? (stopPct * (currentSnap.trading?.values.takeProfitR ?? 2));
-          const tpPricePct = tpPct / 100;
-          const fallbackCalcStop = side === 'LONG'
-            ? entryPrice * (1 - stopPricePct)
-            : entryPrice * (1 + stopPricePct);
-          const fallbackCalcTp = side === 'LONG'
-            ? entryPrice * (1 + tpPricePct)
-            : entryPrice * (1 - tpPricePct);
+          const isGold = targetSymbol.toUpperCase().startsWith('XAU');
+          const priceDp = isGold ? 2 : entryPrice >= 100 ? 2 : entryPrice >= 1 ? 4 : 8;
 
-          const priceDp = entryPrice >= 100 ? 2 : entryPrice >= 1 ? 4 : 8;
-          const profileStop = Number(fallbackCalcStop.toFixed(priceDp));
-          const profileTp = Number(fallbackCalcTp.toFixed(priceDp));
+          // Pure Fast Scalping (M1-M15) SL & TP logic with guaranteed RR 1:2
+          // For Gold (XAUUSD): SL is $6.00, TP is $12.00 (RR 1:2)
+          // For Crypto (BTC, ETH, etc.): SL is 0.6%, TP is 1.2% (RR 1:2)
+          const defaultSlDistance = isGold ? 6.0 : entryPrice * 0.006;
+          const defaultTpDistance = isGold ? 12.0 : entryPrice * 0.012;
+
+          let stopPrice: number;
+          let tpPrice: number;
 
           const rawThesisStop = Number(out.verdict.thesis.stop);
-          const hasValidThesisStop = Number.isFinite(rawThesisStop) && rawThesisStop > 0 &&
-            (side === 'LONG' ? rawThesisStop < entryPrice : rawThesisStop > entryPrice);
+          const hasSensibleStop = Number.isFinite(rawThesisStop) && rawThesisStop > 0 &&
+            (side === 'LONG' ? rawThesisStop < entryPrice : rawThesisStop > entryPrice) &&
+            (isGold
+              ? Math.abs(rawThesisStop - entryPrice) <= 15.0 && Math.abs(rawThesisStop - entryPrice) >= 2.0
+              : Math.abs(rawThesisStop - entryPrice) / entryPrice <= 0.02 && Math.abs(rawThesisStop - entryPrice) / entryPrice >= 0.002);
 
-          const rawThesisTp = out.verdict.thesis.tp ? Number(out.verdict.thesis.tp) : null;
-          const hasValidThesisTp = rawThesisTp !== null && Number.isFinite(rawThesisTp) && rawThesisTp > 0 &&
-            (side === 'LONG' ? rawThesisTp > entryPrice : rawThesisTp < entryPrice);
+          if (hasSensibleStop) {
+            stopPrice = Number(rawThesisStop.toFixed(priceDp));
+            const actualSlDist = Math.abs(entryPrice - stopPrice);
+            const rawThesisTp = out.verdict.thesis.tp ? Number(out.verdict.thesis.tp) : null;
+            const hasSensibleTp = rawThesisTp !== null && Number.isFinite(rawThesisTp) && rawThesisTp > 0 &&
+              (side === 'LONG' ? rawThesisTp > entryPrice : rawThesisTp < entryPrice) &&
+              (isGold
+                ? Math.abs(rawThesisTp - entryPrice) <= 30.0 && Math.abs(rawThesisTp - entryPrice) >= actualSlDist * 1.5
+                : Math.abs(rawThesisTp - entryPrice) / entryPrice <= 0.04 && Math.abs(rawThesisTp - entryPrice) / entryPrice >= (actualSlDist / entryPrice) * 1.5);
 
-          const stopPrice = hasValidThesisStop ? Number(rawThesisStop.toFixed(priceDp)) : profileStop;
-          const tpPrice = hasValidThesisTp ? Number(rawThesisTp!.toFixed(priceDp)) : profileTp;
+            if (hasSensibleTp) {
+              tpPrice = Number(rawThesisTp!.toFixed(priceDp));
+            } else {
+              const tpDist = actualSlDist * 2; // Strict 1:2 RR
+              tpPrice = side === 'LONG'
+                ? Number((entryPrice + tpDist).toFixed(priceDp))
+                : Number((entryPrice - tpDist).toFixed(priceDp));
+            }
+          } else {
+            // Apply strict scalping defaults with guaranteed RR 1:2
+            stopPrice = side === 'LONG'
+              ? Number((entryPrice - defaultSlDistance).toFixed(priceDp))
+              : Number((entryPrice + defaultSlDistance).toFixed(priceDp));
+            tpPrice = side === 'LONG'
+              ? Number((entryPrice + defaultTpDistance).toFixed(priceDp))
+              : Number((entryPrice - defaultTpDistance).toFixed(priceDp));
+          }
 
           hub.emit('log', {
             at: Date.now(),
             kind: 'execution',
-            text: `${targetSymbol}: executed with ${hasValidThesisStop ? 'tactical desk SL' : 'profile SL'} ${stopPrice} and ${hasValidThesisTp ? 'tactical desk TP' : 'profile TP'} ${tpPrice}.`
+            text: `${targetSymbol}: executed scalping order with SL ${stopPrice} and TP ${tpPrice} (RR 1:2).`
           });
           const margin = Math.round(perOrder * 100) / 100;
           const qty = entryPrice > 0 ? Math.round(((margin * leverage) / entryPrice) * 1000) / 1000 : 1;
@@ -5777,6 +5798,22 @@ export async function startReplacementServer(
           for (const pos of draft.paper.positions) {
             const sym = pos.symbol.toUpperCase();
             const p = draft.tickers[sym]?.last;
+            const isGold = sym.startsWith('XAU');
+            const entry = Number(pos.entry);
+            const side = pos.side;
+            const currentStopDist = Math.abs(pos.stop - entry);
+            const needsSanitize = isGold
+              ? (currentStopDist > 15.0 || !pos.tp || pos.tp < 2500)
+              : (currentStopDist / entry > 0.02 || !pos.tp || (side === 'SHORT' && pos.tp < entry * 0.8));
+
+            if (needsSanitize && entry > 0) {
+              const priceDp = isGold ? 2 : entry >= 100 ? 2 : 4;
+              const slDist = isGold ? 6.0 : entry * 0.006;
+              const tpDist = isGold ? 12.0 : entry * 0.012;
+              pos.stop = side === 'LONG' ? Number((entry - slDist).toFixed(priceDp)) : Number((entry + slDist).toFixed(priceDp));
+              pos.tp = side === 'LONG' ? Number((entry + tpDist).toFixed(priceDp)) : Number((entry - tpDist).toFixed(priceDp));
+            }
+
             if (p && Number(p) > 0) {
               pos.mark = Number(p);
               const mult = pos.side === 'LONG' ? 1 : -1;
