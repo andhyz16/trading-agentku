@@ -122,7 +122,7 @@ export async function generateMockAgentReply(req: MockAgentReplyRequest): Promis
       else lastPrice = 75000;
     }
 
-    const isBull = change24h > 0;
+    const isBull = change24h !== 0 ? change24h > 0 : (Math.floor(lastPrice) % 2 === 0);
     const directionalStance: 'LONG' | 'SHORT' = isBull ? 'LONG' : 'SHORT';
     const oppositeStance: 'LONG' | 'SHORT' = isBull ? 'SHORT' : 'LONG';
     const stopRatio = isBull ? 0.975 : 1.025;
