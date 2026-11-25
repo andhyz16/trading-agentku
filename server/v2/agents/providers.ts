@@ -181,41 +181,56 @@ export function createOfficialProviderCaller(
       if (provider === 'gemini') {
         let model = (req.model ?? '').replace(/^models\//, '').trim();
         if (model === 'gemini-2.0-flash' || model === 'gemini-2.0-flash-lite' || !model || model === 'unconfigured' || model === 'default' || model === 'gemini' || model.startsWith('mock') || !model.includes('gemini')) {
-          model = 'gemini-3.8-flash';
+          model = 'gemini-2.5-flash';
         }
         const base = (req.baseUrl ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
         const cleanKey = (req.apiKey ?? '').trim();
 
-        const callGemini = async (targetModel: string) => {
+        const callGemini = async (targetModel: string, retries = 2): Promise<any> => {
           const url = `${base}/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
-          return (await postJson(
-            url,
-            { 'x-goog-api-key': cleanKey },
-            {
-              systemInstruction: { parts: [{ text: req.system }] },
-              contents: [{ role: 'user', parts: [{ text: req.user }] }],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 8192,
-                responseMimeType: 'application/json'
+          try {
+            return (await postJson(
+              url,
+              { 'x-goog-api-key': cleanKey },
+              {
+                systemInstruction: { parts: [{ text: req.system }] },
+                contents: [{ role: 'user', parts: [{ text: req.user }] }],
+                generationConfig: {
+                  temperature: 0.3,
+                  maxOutputTokens: 8192,
+                  responseMimeType: 'application/json'
+                }
               }
+            )) as {
+              candidates?: Array<{
+                content?: { parts?: Array<{ text?: string }> };
+                finishReason?: string;
+              }>;
+              error?: { message?: string; code?: number };
+            };
+          } catch (err: any) {
+            const isRateLimit = /429|quota|rate-limit|exhausted/i.test(err?.message ?? '');
+            if (isRateLimit && retries > 0) {
+              console.warn(`[GEMINI] Rate limit / quota hit on ${targetModel}. Waiting 3.5s before retry (${retries} left)...`);
+              await new Promise((r) => setTimeout(r, 3500));
+              return callGemini(targetModel, retries - 1);
             }
-          )) as {
-            candidates?: Array<{
-              content?: { parts?: Array<{ text?: string }> };
-              finishReason?: string;
-            }>;
-            error?: { message?: string; code?: number };
-          };
+            throw err;
+          }
         };
 
         let data: any;
         try {
           data = await callGemini(model);
         } catch (err: any) {
-          if (model !== 'gemini-2.5-flash' && /404|no longer available/i.test(err?.message ?? '')) {
-            console.warn(`[GEMINI] ${model} unavailable, falling back to gemini-2.5-flash...`);
-            data = await callGemini('gemini-2.5-flash');
+          if (/404|no longer available|429|quota/i.test(err?.message ?? '')) {
+            const fallbackModel = model !== 'gemini-2.5-flash' ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
+            console.warn(`[GEMINI] ${model} unavailable or rate-limited. Trying fallback ${fallbackModel}...`);
+            try {
+              data = await callGemini(fallbackModel, 1);
+            } catch (err2: any) {
+              throw err2;
+            }
           } else {
             throw err;
           }
