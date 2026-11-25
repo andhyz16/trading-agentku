@@ -536,21 +536,29 @@ export function createReplacementRuntime(
     state.accountState = options.accountState;
   }
 
+  const secretsMap = options.secrets?.readEnvMap() ?? {};
+  const combinedEnv: Record<string, string | undefined> = { ...env, ...process.env, ...secretsMap };
+  const hasGemini = Boolean((combinedEnv.GEMINI_API_KEY ?? '').trim());
   const effectiveAgents = options.settings?.current().effective.agents;
-  if (effectiveAgents) {
-    for (const role of ROLE_IDS) {
-      const conf = effectiveAgents[role];
-      if (conf) {
-        state.agents[role].provider = conf.provider;
-        state.agents[role].model = conf.model;
-        state.agents[role].configuredProvider = conf.provider;
-        state.agents[role].configuredModel = conf.model;
-        state.agents[role].invokedProvider = conf.provider;
-        state.agents[role].invokedModel = conf.model;
-        state.agents[role].executionStatus = 'IDLE';
-        state.agents[role].lastLine = `Configured for ${conf.provider}/${conf.model}.`;
-      }
+
+  for (const role of ROLE_IDS) {
+    const conf = effectiveAgents?.[role];
+    let prov = conf?.provider ?? (hasGemini ? 'gemini' : 'mock');
+    if ((!prov || prov === 'mock' || prov === 'unconfigured') && hasGemini) {
+      prov = 'gemini';
     }
+    let mdl = conf?.model ?? (prov === 'gemini' ? 'gemini-3.8-flash' : 'mock-desk-v1');
+    if (prov === 'gemini' && (!mdl || mdl === 'gemini-2.0-flash' || mdl.startsWith('mock') || !mdl.includes('gemini'))) {
+      mdl = (combinedEnv.GEMINI_MODEL && combinedEnv.GEMINI_MODEL !== 'gemini-2.0-flash' ? combinedEnv.GEMINI_MODEL : 'gemini-3.8-flash').trim();
+    }
+    state.agents[role].provider = prov;
+    state.agents[role].model = mdl;
+    state.agents[role].configuredProvider = prov;
+    state.agents[role].configuredModel = mdl;
+    state.agents[role].invokedProvider = prov;
+    state.agents[role].invokedModel = mdl;
+    state.agents[role].executionStatus = 'IDLE';
+    state.agents[role].lastLine = `Configured for ${prov}/${mdl}.`;
   }
 
   state.conversations = options.chatService?.listConversations() ?? [
