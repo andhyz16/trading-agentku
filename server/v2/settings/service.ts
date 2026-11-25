@@ -293,10 +293,14 @@ export class SettingsService {
           : provider === 'mock'
             ? (env.MOCK_MODEL ?? 'mock-desk-v1')
             : undefined;
-      const model =
+      let model =
         (env[`AGENT_${upper}_MODEL`] ?? '').trim() ||
         (providerModelEnv ?? '').trim() ||
         DEFAULT_PROVIDER_MODELS[provider];
+
+      if (provider === 'gemini' && (!model || model.startsWith('mock') || !model.includes('gemini'))) {
+        model = 'gemini-2.0-flash';
+      }
 
       return {
         provider,

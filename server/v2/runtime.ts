@@ -787,32 +787,73 @@ export function createReplacementRuntime(
       researchHost: options.researchHost,
       providerCaller,
       resolveAssignment: (role, _version) => {
+        const secretsMap = options.secrets?.readEnvMap() ?? {};
+        const combinedEnv: Record<string, string | undefined> = { ...env, ...process.env, ...secretsMap };
+
         const settingsSnap = options.settings?.current();
         const configuredAgent = settingsSnap?.effective?.agents?.[role];
         const defaultAgent = settingsSnap?.effective?.agents?.lead;
 
         const upper = role.toUpperCase();
-        let rawProv = (configuredAgent?.provider ?? defaultAgent?.provider ?? env[`AGENT_${upper}_PROVIDER`] ?? env.DEFAULT_PROVIDER ?? '').trim().toLowerCase();
+        let rawProv = (combinedEnv[`AGENT_${upper}_PROVIDER`] ?? combinedEnv.DEFAULT_PROVIDER ?? configuredAgent?.provider ?? defaultAgent?.provider ?? '').trim().toLowerCase();
+
+        const geminiKey = (combinedEnv.GEMINI_API_KEY ?? '').trim();
+        const deepseekKey = (combinedEnv.DEEPSEEK_API_KEY ?? '').trim();
+        const openaiKey = (combinedEnv.OPENAI_API_KEY ?? '').trim();
+        const xaiKey = (combinedEnv.XAI_API_KEY ?? '').trim();
+        const anthropicKey = (combinedEnv.ANTHROPIC_API_KEY ?? '').trim();
+        const openrouterKey = (combinedEnv.OPENROUTER_API_KEY ?? '').trim();
+
         if (!rawProv || rawProv === 'mock' || rawProv === 'unconfigured') {
-          if ((env.GEMINI_API_KEY ?? '').trim()) rawProv = 'gemini';
-          else if ((env.DEEPSEEK_API_KEY ?? '').trim()) rawProv = 'deepseek';
-          else if ((env.OPENAI_API_KEY ?? '').trim()) rawProv = 'openai';
-          else if ((env.XAI_API_KEY ?? '').trim()) rawProv = 'xai';
-          else if ((env.ANTHROPIC_API_KEY ?? '').trim()) rawProv = 'anthropic';
-          else if ((env.OPENROUTER_API_KEY ?? '').trim()) rawProv = 'openrouter';
+          if (geminiKey) rawProv = 'gemini';
+          else if (deepseekKey) rawProv = 'deepseek';
+          else if (openaiKey) rawProv = 'openai';
+          else if (xaiKey) rawProv = 'xai';
+          else if (anthropicKey) rawProv = 'anthropic';
+          else if (openrouterKey) rawProv = 'openrouter';
         }
         const provider = rawProv && rawProv !== 'mock' ? rawProv : (rawProv === 'mock' ? 'mock' : 'unconfigured');
-        const defaultModelForProv = provider === 'gemini' ? (env.GEMINI_MODEL || 'gemini-2.0-flash') : provider === 'deepseek' ? (env.DEEPSEEK_MODEL || 'deepseek-chat') : provider === 'openai' ? (env.OPENAI_MODEL || 'gpt-4o-mini') : 'unconfigured';
-        const model = (configuredAgent?.model && configuredAgent.model !== 'unconfigured'
-          ? configuredAgent.model
-          : defaultAgent?.model && defaultAgent.model !== 'unconfigured'
-          ? defaultAgent.model
-          : env[`AGENT_${upper}_MODEL`] ?? env[`${provider.toUpperCase()}_MODEL`] ?? env.DEFAULT_MODEL ?? defaultModelForProv).trim();
-        const reasoningEffort = configuredAgent?.reasoning ?? defaultAgent?.reasoning;
+        const defaultModelForProv = provider === 'gemini'
+          ? (combinedEnv.GEMINI_MODEL || 'gemini-2.0-flash')
+          : provider === 'deepseek'
+          ? (combinedEnv.DEEPSEEK_MODEL || 'deepseek-chat')
+          : provider === 'openai'
+          ? (combinedEnv.OPENAI_MODEL || 'gpt-4o-mini')
+          : 'unconfigured';
 
-        const secretsMap = options.secrets?.readEnvMap() ?? env;
+        const agentModel = configuredAgent?.provider === provider ? configuredAgent.model : undefined;
+        const defaultAgentModel = defaultAgent?.provider === provider ? defaultAgent.model : undefined;
+
+        let model = (agentModel && agentModel !== 'unconfigured' && !agentModel.startsWith('mock')
+          ? agentModel
+          : defaultAgentModel && defaultAgentModel !== 'unconfigured' && !defaultAgentModel.startsWith('mock')
+          ? defaultAgentModel
+          : combinedEnv[`AGENT_${upper}_MODEL`] ?? combinedEnv[`${provider.toUpperCase()}_MODEL`] ?? combinedEnv.DEFAULT_MODEL ?? defaultModelForProv).trim();
+
+        if (provider === 'gemini') {
+          if (!model || model.startsWith('mock') || model === 'unconfigured' || model === 'default' || !model.includes('gemini')) {
+            model = (combinedEnv.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+          }
+        } else if (provider === 'deepseek') {
+          if (!model || model.startsWith('mock') || !model.includes('deepseek')) {
+            model = (combinedEnv.DEEPSEEK_MODEL || 'deepseek-chat').trim();
+          }
+        } else if (provider === 'openai') {
+          if (!model || model.startsWith('mock') || (!model.includes('gpt') && !model.startsWith('o'))) {
+            model = (combinedEnv.OPENAI_MODEL || 'gpt-4o-mini').trim();
+          }
+        } else if (provider === 'anthropic') {
+          if (!model || model.startsWith('mock') || !model.includes('claude')) {
+            model = (combinedEnv.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest').trim();
+          }
+        }
+
+        const reasoningEffort = configuredAgent?.reasoning ?? defaultAgent?.reasoning;
         const keyEnv = PROVIDER_KEY_ENV[provider as ApiProviderId] || `${provider.toUpperCase()}_API_KEY`;
-        const apiKey = (secretsMap[keyEnv] ?? env[keyEnv] ?? '').trim();
+        const apiKey = (combinedEnv[keyEnv] ?? '').trim();
+
+        console.log(`[AGENT_ASSIGNMENT] Role: ${role} -> Provider: ${provider}, Model: ${model}, KeyPresent: ${Boolean(apiKey)}`);
+
         return {
           provider,
           model,
@@ -2433,7 +2474,9 @@ export function createReplacementRuntime(
       hub.emit('state', snapshot());
 
       // Send Telegram Debate Result Card
-      if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+      const activeTgToken = (options.secrets?.readEnvMap()?.TELEGRAM_BOT_TOKEN ?? env.TELEGRAM_BOT_TOKEN ?? process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
+      const activeTgChatId = (options.secrets?.readEnvMap()?.TELEGRAM_CHAT_ID ?? env.TELEGRAM_CHAT_ID ?? process.env.TELEGRAM_CHAT_ID ?? '').trim();
+      if (activeTgToken && activeTgChatId) {
         const isTrade = verdictRecord.action === 'OPEN_LONG' || verdictRecord.action === 'OPEN_SHORT';
         const actionLabel = verdictRecord.action === 'OPEN_LONG'
           ? '🟢 KEPUTUSAN: BUY / LONG (SCALPING)'
@@ -2473,7 +2516,7 @@ export function createReplacementRuntime(
         tgVerdictMsg += `━━━━━━━━━━━━━━━━━━━━\n` +
           `💡 <i>Hasil konsensus final disahkan oleh Desk Lead & Risk Manager.</i>`;
 
-        void telegramSend(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, tgVerdictMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
+        void telegramSend(activeTgToken, activeTgChatId, tgVerdictMsg, fetch, TELEGRAM_QUICK_KEYBOARD).catch(() => {});
       }
       return { ok: true, message: `Cycle ${cycleId} finished with verdict ${verdictRecord.action}`, cycleId, verdict: verdictRecord };
     } catch (err) {

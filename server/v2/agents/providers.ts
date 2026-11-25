@@ -180,7 +180,7 @@ export function createOfficialProviderCaller(
 
       if (provider === 'gemini') {
         let model = (req.model ?? '').replace(/^models\//, '').trim();
-        if (!model || model === 'unconfigured' || model === 'default' || model === 'gemini') {
+        if (!model || model === 'unconfigured' || model === 'default' || model === 'gemini' || model.startsWith('mock') || !model.includes('gemini')) {
           model = 'gemini-2.0-flash';
         }
         const base = (req.baseUrl ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
