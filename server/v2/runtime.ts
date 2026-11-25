@@ -98,7 +98,7 @@ import {
   formatWatchlistCard
 } from './channel-text.js';
 import { readKill, writeKill, clearKill, DEFAULT_KILL_FILE } from './kill-file.js';
-import { runMarketRadar, runDailyTop5Radar, ALL_APP_SYMBOLS } from './screener.js';
+import { runMarketRadar, runDailyTop5Radar, ALL_APP_SYMBOLS, fetchPublicPrice } from './screener.js';
 function normSymbol(s: string): string {
   const up = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!up) return '';
@@ -2890,7 +2890,11 @@ export function createReplacementRuntime(
       }
       if (side && symWord) {
         const sym = normSymbol(symWord);
-        const last = Number(snapshot().tickers[sym]?.last ?? 0);
+        let last = Number(snapshot().tickers[sym]?.last ?? 0);
+        if (!(last > 0)) {
+          const pub = await fetchPublicPrice(sym, fetch);
+          if (pub.price > 0) last = pub.price;
+        }
         if (!(last > 0)) {
           return { ok: false, command: 'open', error: `Harga ${sym} belum tersedia dari feed. Coba lagi sebentar lagi.` };
         }

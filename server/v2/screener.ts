@@ -41,7 +41,7 @@ export function normalizeSymbol(raw: string): string {
   return clean;
 }
 
-async function fetchPublicPrice(symbol: string, fetchImpl: typeof fetch): Promise<{ price: number; change24h: number; high?: number; low?: number }> {
+export async function fetchPublicPrice(symbol: string, fetchImpl: typeof fetch = fetch): Promise<{ price: number; change24h: number; high?: number; low?: number }> {
   // 1. Try Binance Vision (official global public endpoint, not blocked by Indonesian ISPs)
   try {
     const res = await fetchImpl(`https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${symbol}`, {
