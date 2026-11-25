@@ -814,7 +814,7 @@ export function createReplacementRuntime(
         }
         const provider = rawProv && rawProv !== 'mock' ? rawProv : (rawProv === 'mock' ? 'mock' : 'unconfigured');
         const defaultModelForProv = provider === 'gemini'
-          ? (combinedEnv.GEMINI_MODEL || 'gemini-2.0-flash')
+          ? (combinedEnv.GEMINI_MODEL && combinedEnv.GEMINI_MODEL !== 'gemini-2.0-flash' ? combinedEnv.GEMINI_MODEL : 'gemini-3.8-flash')
           : provider === 'deepseek'
           ? (combinedEnv.DEEPSEEK_MODEL || 'deepseek-chat')
           : provider === 'openai'
@@ -831,8 +831,8 @@ export function createReplacementRuntime(
           : combinedEnv[`AGENT_${upper}_MODEL`] ?? combinedEnv[`${provider.toUpperCase()}_MODEL`] ?? combinedEnv.DEFAULT_MODEL ?? defaultModelForProv).trim();
 
         if (provider === 'gemini') {
-          if (!model || model.startsWith('mock') || model === 'unconfigured' || model === 'default' || !model.includes('gemini')) {
-            model = (combinedEnv.GEMINI_MODEL || 'gemini-2.0-flash').trim();
+          if (!model || model === 'gemini-2.0-flash' || model.startsWith('mock') || model === 'unconfigured' || model === 'default' || !model.includes('gemini')) {
+            model = (combinedEnv.GEMINI_MODEL && combinedEnv.GEMINI_MODEL !== 'gemini-2.0-flash' ? combinedEnv.GEMINI_MODEL : 'gemini-3.8-flash').trim();
           }
         } else if (provider === 'deepseek') {
           if (!model || model.startsWith('mock') || !model.includes('deepseek')) {

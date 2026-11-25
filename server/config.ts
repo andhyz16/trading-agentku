@@ -112,7 +112,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     xai: env.XAI_MODEL || 'grok-3-mini',
     openai: env.OPENAI_MODEL || 'gpt-4o-mini',
     anthropic: env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest',
-    gemini: env.GEMINI_MODEL || 'gemini-2.0-flash',
+    gemini: (env.GEMINI_MODEL && env.GEMINI_MODEL !== 'gemini-2.0-flash') ? env.GEMINI_MODEL : 'gemini-3.8-flash',
     deepseek: env.DEEPSEEK_MODEL || 'deepseek-chat',
     openrouter: env.OPENROUTER_MODEL || 'openrouter/auto',
     groq: env.GROQ_MODEL || 'llama-3.3-70b-versatile',

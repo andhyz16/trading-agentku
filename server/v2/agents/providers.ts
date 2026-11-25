@@ -180,35 +180,51 @@ export function createOfficialProviderCaller(
 
       if (provider === 'gemini') {
         let model = (req.model ?? '').replace(/^models\//, '').trim();
-        if (!model || model === 'unconfigured' || model === 'default' || model === 'gemini' || model.startsWith('mock') || !model.includes('gemini')) {
-          model = 'gemini-2.0-flash';
+        if (model === 'gemini-2.0-flash' || model === 'gemini-2.0-flash-lite' || !model || model === 'unconfigured' || model === 'default' || model === 'gemini' || model.startsWith('mock') || !model.includes('gemini')) {
+          model = 'gemini-3.8-flash';
         }
         const base = (req.baseUrl ?? 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
         const cleanKey = (req.apiKey ?? '').trim();
-        const url = `${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-        const data = (await postJson(
-          url,
-          { 'x-goog-api-key': cleanKey },
-          {
-            systemInstruction: { parts: [{ text: req.system }] },
-            contents: [{ role: 'user', parts: [{ text: req.user }] }],
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 8192,
-              responseMimeType: 'application/json'
+
+        const callGemini = async (targetModel: string) => {
+          const url = `${base}/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
+          return (await postJson(
+            url,
+            { 'x-goog-api-key': cleanKey },
+            {
+              systemInstruction: { parts: [{ text: req.system }] },
+              contents: [{ role: 'user', parts: [{ text: req.user }] }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 8192,
+                responseMimeType: 'application/json'
+              }
             }
-          }
-        )) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-            finishReason?: string;
-          }>;
-          error?: { message?: string; code?: number };
+          )) as {
+            candidates?: Array<{
+              content?: { parts?: Array<{ text?: string }> };
+              finishReason?: string;
+            }>;
+            error?: { message?: string; code?: number };
+          };
         };
+
+        let data: any;
+        try {
+          data = await callGemini(model);
+        } catch (err: any) {
+          if (model !== 'gemini-2.5-flash' && /404|no longer available/i.test(err?.message ?? '')) {
+            console.warn(`[GEMINI] ${model} unavailable, falling back to gemini-2.5-flash...`);
+            data = await callGemini('gemini-2.5-flash');
+          } else {
+            throw err;
+          }
+        }
+
         if (data?.error) {
           throw new Error(`Gemini API error: ${data.error.message ?? 'Unknown'}`);
         }
-        const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
+        const text = (data?.candidates?.[0]?.content?.parts ?? []).map((p: any) => p.text ?? '').join('').trim();
         if (!text) {
           const reason = data?.candidates?.[0]?.finishReason ?? 'no candidates';
           throw new Error(`Gemini returned empty output (finishReason: ${reason})`);

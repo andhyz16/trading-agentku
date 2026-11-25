@@ -54,7 +54,7 @@ const DEFAULT_PROVIDER_MODELS: Record<ModelProviderId, string> = {
   xai: 'grok-3-mini',
   openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-haiku-latest',
-  gemini: 'gemini-2.0-flash',
+  gemini: 'gemini-3.8-flash',
   deepseek: 'deepseek-chat',
   openrouter: 'openrouter/auto',
   groq: 'llama-3.3-70b-versatile',
@@ -298,8 +298,8 @@ export class SettingsService {
         (providerModelEnv ?? '').trim() ||
         DEFAULT_PROVIDER_MODELS[provider];
 
-      if (provider === 'gemini' && (!model || model.startsWith('mock') || !model.includes('gemini'))) {
-        model = 'gemini-2.0-flash';
+      if (provider === 'gemini' && (!model || model === 'gemini-2.0-flash' || model.startsWith('mock') || !model.includes('gemini'))) {
+        model = (env.GEMINI_MODEL && env.GEMINI_MODEL !== 'gemini-2.0-flash' ? env.GEMINI_MODEL : 'gemini-3.8-flash').trim();
       }
 
       return {
